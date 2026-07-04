@@ -1,0 +1,2007 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mi Recetario — Hablemos de Cocina</title>
+<meta name="theme-color" content="#2C1810">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Recetario">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --primary:#2C1810;
+    --secondary:#D4A853;
+    --accent:#E8623A;
+    --bg:#FAF7F2;
+    --card:#FFFFFF;
+    --text:#2C1810;
+    --muted:#8A7A6D;
+    --line:#EAE2D6;
+    --ok:#3E7C4F;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:'Nunito',sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    min-height:100vh;
+  }
+  h1,h2,h3{font-family:'Playfair Display',serif}
+
+  /* ───── Cabecera ───── */
+  header{
+    background:var(--primary);
+    color:#FAF7F2;
+    padding:18px 28px;
+    display:flex;
+    align-items:center;
+    gap:18px;
+    flex-wrap:wrap;
+    position:sticky;
+    top:0;
+    z-index:50;
+  }
+  header .brand{display:flex;align-items:baseline;gap:12px;flex:1;min-width:240px}
+  header h1{font-size:26px;font-weight:700;letter-spacing:.3px}
+  header .sub{color:var(--secondary);font-size:14px;font-weight:600}
+  .btn{
+    border:none;
+    border-radius:10px;
+    padding:11px 18px;
+    font-family:'Nunito',sans-serif;
+    font-size:15px;
+    font-weight:700;
+    cursor:pointer;
+    transition:transform .15s ease, box-shadow .15s ease, background .15s ease;
+  }
+  .btn:hover{transform:translateY(-1px)}
+  .btn:focus-visible{outline:3px solid var(--secondary);outline-offset:2px}
+  .btn-accent{background:var(--accent);color:#fff}
+  .btn-accent:hover{background:#D4552F}
+  .btn-gold{background:var(--secondary);color:var(--primary)}
+  .btn-gold:hover{background:#C69A45}
+  .btn-ghost{background:transparent;color:#FAF7F2;border:1.5px solid rgba(250,247,242,.35)}
+  .btn-ghost:hover{border-color:var(--secondary);color:var(--secondary)}
+  .sesion-estado{
+    font-size:13px;font-weight:800;cursor:pointer;
+    padding:7px 13px;border-radius:999px;white-space:nowrap;
+    border:1.5px solid rgba(250,247,242,.3);color:#FAF7F2;
+    transition:border-color .15s ease;
+  }
+  .sesion-estado:hover{border-color:var(--secondary)}
+  .sesion-estado.on{border-color:var(--ok);color:#8FD9A4}
+  .sesion-estado.off{border-color:rgba(232,98,58,.5);color:#F0A58E}
+  .btn-line{background:#fff;color:var(--primary);border:1.5px solid var(--line)}
+  .btn-line:hover{border-color:var(--secondary)}
+  .btn-danger{background:#fff;color:#B3402A;border:1.5px solid #E8C4BA}
+  .btn-danger:hover{background:#FBEFEC}
+  .btn-wa{background:#25D366;color:#fff}
+  .btn-wa:hover{background:#1EBE5A}
+
+  /* ───── Barra de filtros ───── */
+  .toolbar{
+    display:flex;
+    gap:14px;
+    align-items:center;
+    flex-wrap:wrap;
+    padding:20px 28px 6px;
+  }
+  .toolbar input[type=search], .toolbar select{
+    font-family:'Nunito',sans-serif;
+    font-size:15px;
+    padding:11px 14px;
+    border:1.5px solid var(--line);
+    border-radius:10px;
+    background:#fff;
+    color:var(--text);
+  }
+  .toolbar input[type=search]{flex:1;min-width:240px}
+  .toolbar input[type=search]:focus, .toolbar select:focus,
+  .form-grid input:focus, .form-grid select:focus, .form-grid textarea:focus{
+    outline:none;
+    border-color:var(--secondary);
+    box-shadow:0 0 0 3px rgba(212,168,83,.22);
+  }
+  .counter{color:var(--muted);font-size:14px;font-weight:700;margin-left:auto}
+
+  /* ───── Rejilla de recetas ───── */
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
+    gap:20px;
+    padding:18px 28px 40px;
+  }
+  .card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    overflow:hidden;
+    cursor:pointer;
+    display:flex;
+    flex-direction:column;
+    transition:transform .18s ease, box-shadow .18s ease;
+  }
+  .card:hover{transform:translateY(-3px);box-shadow:0 10px 26px rgba(44,24,16,.12)}
+  .card:focus-visible{outline:3px solid var(--secondary);outline-offset:2px}
+  .card .photo{
+    height:160px;
+    background:linear-gradient(135deg,#3A2418,#2C1810);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:var(--secondary);
+    font-family:'Playfair Display',serif;
+    font-size:42px;
+    background-size:cover;
+    background-position:center;
+  }
+  .card .body{padding:16px 18px 18px;display:flex;flex-direction:column;gap:10px;flex:1}
+  .card h3{font-size:20px;line-height:1.25}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{
+    font-size:12.5px;
+    font-weight:800;
+    padding:4px 11px;
+    border-radius:999px;
+    letter-spacing:.2px;
+  }
+  .chip-cat{background:rgba(212,168,83,.18);color:#8A6620}
+  .chip-dif{background:rgba(232,98,58,.13);color:#B3402A}
+  .chip-pub{background:rgba(62,124,79,.15);color:#2E6B40}
+  .chip-bor{background:rgba(138,122,109,.16);color:#6B5D50}
+  .meta{
+    display:flex;
+    gap:16px;
+    color:var(--muted);
+    font-size:13.5px;
+    font-weight:700;
+    margin-top:auto;
+    border-top:1px dashed var(--line);
+    padding-top:10px;
+  }
+
+  /* ───── Estado vacío ───── */
+  .empty{
+    grid-column:1/-1;
+    text-align:center;
+    padding:70px 20px;
+    color:var(--muted);
+  }
+  .empty .icon{font-size:52px;margin-bottom:14px}
+  .empty h2{font-size:24px;color:var(--primary);margin-bottom:8px}
+  .empty p{font-size:15px}
+
+  /* ───── Modales ───── */
+  .overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(44,24,16,.55);
+    display:none;
+    align-items:flex-start;
+    justify-content:center;
+    padding:34px 16px;
+    z-index:100;
+    overflow-y:auto;
+  }
+  .overlay.open{display:flex}
+  .modal{
+    background:var(--bg);
+    border-radius:18px;
+    width:min(860px,100%);
+    box-shadow:0 24px 60px rgba(0,0,0,.3);
+    overflow:hidden;
+  }
+  .modal-head{
+    background:var(--primary);
+    color:#FAF7F2;
+    padding:18px 26px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:14px;
+  }
+  .modal-head h2{font-size:23px}
+  .close-x{
+    background:none;border:none;color:#FAF7F2;font-size:26px;cursor:pointer;
+    line-height:1;padding:4px 8px;border-radius:8px;
+  }
+  .close-x:hover{color:var(--secondary)}
+  .modal-body{padding:24px 26px 28px}
+
+  /* ───── Formulario ───── */
+  .form-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:14px}
+  .form-grid label{
+    display:flex;flex-direction:column;gap:6px;
+    font-size:13.5px;font-weight:800;color:var(--primary);
+  }
+  .form-grid input,.form-grid select,.form-grid textarea{
+    font-family:'Nunito',sans-serif;
+    font-size:15px;
+    padding:10px 13px;
+    border:1.5px solid var(--line);
+    border-radius:10px;
+    background:#fff;
+    color:var(--text);
+    width:100%;
+  }
+  .form-grid textarea{resize:vertical;min-height:110px;line-height:1.55}
+  .span12{grid-column:span 12}
+  .span6{grid-column:span 6}
+  .span4{grid-column:span 4}
+  .span3{grid-column:span 3}
+  .hint{font-weight:600;color:var(--muted);font-size:12.5px}
+  .form-actions{
+    display:flex;gap:12px;justify-content:flex-end;margin-top:20px;flex-wrap:wrap;
+  }
+
+  /* ───── Detalle ───── */
+  .detail-photo{
+    height:230px;border-radius:12px;margin-bottom:18px;
+    background:linear-gradient(135deg,#3A2418,#2C1810);
+    background-size:cover;background-position:center;
+    display:flex;align-items:center;justify-content:center;
+    color:var(--secondary);font-family:'Playfair Display',serif;font-size:56px;
+  }
+  .detail-meta{
+    display:flex;gap:14px;flex-wrap:wrap;margin:14px 0 6px;
+  }
+  .detail-meta .box{
+    background:#fff;border:1px solid var(--line);border-radius:10px;
+    padding:10px 16px;text-align:center;min-width:104px;
+  }
+  .detail-meta .box .v{font-size:18px;font-weight:800;color:var(--primary)}
+  .detail-meta .box .k{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  .detail-desc{margin:12px 0 4px;line-height:1.6;font-size:15.5px}
+  .section-title{
+    font-size:20px;margin:22px 0 10px;color:var(--primary);
+    display:flex;align-items:center;gap:10px;
+  }
+  .section-title::after{content:"";flex:1;height:1px;background:var(--line)}
+  ul.ing{list-style:none;display:flex;flex-direction:column;gap:7px}
+  ul.ing li{
+    background:#fff;border:1px solid var(--line);border-radius:9px;
+    padding:9px 14px;font-size:15px;
+  }
+  ul.ing li.tachado{opacity:.5;text-decoration:line-through}
+  ol.steps{list-style:none;counter-reset:paso;display:flex;flex-direction:column;gap:11px}
+  ol.steps li{
+    counter-increment:paso;
+    background:#fff;border:1px solid var(--line);border-radius:9px;
+    padding:12px 16px 12px 54px;position:relative;line-height:1.55;font-size:15px;
+  }
+  ol.steps li::before{
+    content:counter(paso);
+    position:absolute;left:14px;top:11px;
+    width:28px;height:28px;border-radius:50%;
+    background:var(--secondary);color:var(--primary);
+    font-weight:800;font-size:14px;
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Nunito',sans-serif;
+  }
+  .tags-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+  .tag{
+    background:#fff;border:1px dashed var(--secondary);color:#8A6620;
+    border-radius:999px;padding:4px 12px;font-size:12.5px;font-weight:800;
+  }
+
+  /* ───── Aviso ───── */
+  .toast{
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);
+    background:var(--primary);color:#FAF7F2;
+    padding:13px 22px;border-radius:12px;font-weight:700;font-size:15px;
+    box-shadow:0 10px 30px rgba(0,0,0,.25);
+    opacity:0;transition:all .3s ease;z-index:200;pointer-events:none;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast.ok{border-left:5px solid var(--ok)}
+  .toast.warn{border-left:5px solid var(--accent)}
+
+  /* ───── Control de raciones ───── */
+  .serv-control{display:flex;align-items:center;gap:10px;justify-content:center}
+  .serv-btn{
+    width:30px;height:30px;border-radius:50%;
+    border:1.5px solid var(--secondary);background:#fff;color:var(--primary);
+    font-size:18px;font-weight:800;cursor:pointer;line-height:1;
+    font-family:'Nunito',sans-serif;
+  }
+  .serv-btn:hover{background:var(--secondary)}
+  .nota-escala{
+    color:#8A6620;font-size:13px;font-weight:700;
+    background:rgba(212,168,83,.14);border-radius:8px;
+    padding:7px 12px;margin-bottom:10px;display:inline-block;
+  }
+
+  /* ───── Modo cocina ───── */
+  .cocina{
+    position:fixed;inset:0;background:var(--primary);color:#FAF7F2;
+    z-index:300;display:none;flex-direction:column;padding:26px;
+  }
+  .cocina.open{display:flex}
+  .cocina .top{display:flex;justify-content:space-between;align-items:center;gap:14px}
+  .cocina .c-titulo{font-family:'Playfair Display',serif;font-size:18px;color:var(--secondary)}
+  .cocina .c-contador{font-weight:800;font-size:15px;letter-spacing:1.5px;color:rgba(250,247,242,.7)}
+  .cocina .c-paso{
+    flex:1;display:flex;align-items:center;justify-content:center;
+    text-align:center;font-size:clamp(23px,3.6vw,38px);line-height:1.55;
+    font-family:'Playfair Display',serif;padding:20px;
+    max-width:920px;margin:0 auto;
+  }
+  .cocina .c-nav{display:flex;gap:14px;justify-content:center;padding-bottom:8px;flex-wrap:wrap}
+  .cocina .c-nav .btn{font-size:17px;padding:14px 28px}
+  .cocina .c-nav .btn:disabled{opacity:.35;cursor:default;transform:none}
+
+  /* ───── Impresión ───── */
+  #printArea{display:none}
+  @media print{
+    body>*:not(#printArea){display:none!important}
+    #printArea{display:block!important;font-family:Georgia,'Times New Roman',serif;color:#000}
+    #printArea h1{font-size:23pt;margin-bottom:4pt}
+    #printArea .pmeta{font-size:10.5pt;color:#444;margin-bottom:10pt}
+    #printArea .pdesc{font-style:italic;font-size:11pt;margin-bottom:8pt}
+    #printArea h2{font-size:14pt;margin:13pt 0 6pt;border-bottom:1pt solid #999;padding-bottom:3pt}
+    #printArea ul,#printArea ol{margin-left:18pt}
+    #printArea li{font-size:11pt;line-height:1.55;margin-bottom:3pt}
+    #printArea .pfoot{margin-top:16pt;font-size:9.5pt;color:#777;border-top:.5pt solid #ccc;padding-top:5pt}
+  }
+
+  @media (max-width:640px){
+    header{padding:14px 16px}
+    header h1{font-size:21px}
+    .toolbar,.grid{padding-left:16px;padding-right:16px}
+    .span6,.span4,.span3{grid-column:span 12}
+    .modal-body{padding:18px 16px 22px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{transition:none!important;animation:none!important}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>Mi Recetario</h1>
+    <span class="sub">Hablemos de Cocina · borradores</span>
+  </div>
+  <button class="btn btn-gold" onclick="abrirImportUrl()">🔗 Importar de URL</button>
+  <button class="btn btn-gold" onclick="abrirImportTexto()">📝 Pegar receta</button>
+  <button class="btn btn-gold" onclick="document.getElementById('fotoFile').click()">📷 Desde foto</button>
+  <input type="file" id="fotoFile" accept="image/*" style="display:none" onchange="importarDesdeFoto(event)">
+  <button class="btn btn-ghost" onclick="exportarTodo()">⬇ Exportar todo</button>
+  <button class="btn btn-ghost" onclick="document.getElementById('importFile').click()">⬆ Importar copia</button>
+  <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importarCopia(event)">
+  <button class="btn btn-accent" onclick="abrirForm()">+ Nueva receta</button>
+  <button class="btn btn-gold" onclick="abrirListaCompra()">🛒 Lista de compra</button>
+  <button class="btn btn-gold" onclick="abrirNube()">☁ Nube</button>
+  <span id="sesionEstado" class="sesion-estado" onclick="gestionarSesion()" title="Sesión de administrador"></span>
+</header>
+
+<div class="toolbar">
+  <input type="search" id="buscar" placeholder="Buscar por título, ingrediente o etiqueta…" oninput="render()">
+  <select id="fCategoria" onchange="render()">
+    <option value="">Todas las categorías</option>
+  </select>
+  <select id="fDificultad" onchange="render()">
+    <option value="">Todas las dificultades</option>
+  </select>
+  <span class="counter" id="contador"></span>
+</div>
+
+<main class="grid" id="grid"></main>
+
+<!-- Modal lista de la compra -->
+<div class="overlay" id="ovCompra">
+  <div class="modal" style="width:min(680px,100%)">
+    <div class="modal-head">
+      <h2>🛒 Lista de la compra</h2>
+      <button class="close-x" onclick="cerrarListaCompra()" aria-label="Cerrar">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="compraPaso1">
+        <p style="margin-bottom:14px;color:var(--muted);font-weight:600;font-size:14.5px">
+          Elige las recetas y ajusta las raciones. La IA juntará y sumará los ingredientes en una sola lista.
+        </p>
+        <div id="compraSeleccion" style="max-height:340px;overflow-y:auto;display:flex;flex-direction:column;gap:8px"></div>
+        <p id="compraEstado" style="margin-top:12px;font-weight:700;color:var(--muted);font-size:14px;min-height:20px"></p>
+        <div class="form-actions">
+          <button class="btn btn-line" onclick="cerrarListaCompra()">Cancelar</button>
+          <button class="btn btn-accent" id="compraBoton" onclick="generarListaCompra()">Generar lista con IA</button>
+        </div>
+      </div>
+      <div id="compraPaso2" style="display:none">
+        <div id="compraResultado"></div>
+        <div class="form-actions">
+          <button class="btn btn-line" onclick="volverSeleccionCompra()">← Volver</button>
+          <button class="btn btn-wa" onclick="compartirListaWhatsApp()">📱 WhatsApp</button>
+          <button class="btn btn-accent" onclick="cerrarListaCompra()">Hecho</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal nube (recetas publicadas + restaurar) -->
+<div class="overlay" id="ovNube">
+  <div class="modal" style="width:min(760px,100%)">
+    <div class="modal-head">
+      <h2>☁ Recetas en la nube</h2>
+      <button class="close-x" onclick="cerrarNube()" aria-label="Cerrar">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+        <button class="btn btn-line" onclick="cargarPublicadas()">🔄 Ver publicadas en la app</button>
+        <button class="btn btn-line" onclick="restaurarDesdeNube()">⬇ Restaurar mis borradores</button>
+      </div>
+      <p id="nubeEstado" style="font-weight:700;color:var(--muted);font-size:14px;min-height:20px"></p>
+      <div id="nubeLista" style="display:flex;flex-direction:column;gap:10px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal login admin -->
+<div class="overlay" id="ovLogin">
+  <div class="modal" style="width:min(440px,100%)">
+    <div class="modal-head">
+      <h2>Acceso de administrador</h2>
+      <button class="close-x" onclick="cerrarLogin()" aria-label="Cerrar">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin-bottom:16px;line-height:1.55;color:var(--muted);font-weight:600;font-size:14.5px">
+        Inicia sesión con tu cuenta de Hablemos de Cocina para poder publicar recetas en la app.
+      </p>
+      <div class="form-grid">
+        <label class="span12">Correo electrónico
+          <input type="email" id="loginEmail" placeholder="tucorreo@gmail.com" autocomplete="username">
+        </label>
+        <label class="span12">Contraseña
+          <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password"
+            onkeydown="if(event.key==='Enter')hacerLogin()">
+        </label>
+      </div>
+      <p id="loginError" style="color:#B3402A;font-weight:700;font-size:14px;margin-top:12px;min-height:18px"></p>
+      <div class="form-actions">
+        <button class="btn btn-line" onclick="cerrarLogin()">Cancelar</button>
+        <button class="btn btn-accent" id="loginBtn" onclick="hacerLogin()">Iniciar sesión</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal pegar receta (texto) -->
+<div class="overlay" id="ovTexto">
+  <div class="modal" style="width:min(640px,100%)">
+    <div class="modal-head">
+      <h2>Pegar una receta</h2>
+      <button class="close-x" onclick="cerrarImportTexto()" aria-label="Cerrar">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <label class="span12">Pega aquí el texto de la receta
+          <textarea id="textoReceta" style="min-height:200px" placeholder="Pega la receta de donde sea: un WhatsApp, un libro, un PDF, una web… La IA la ordenará en título, ingredientes y pasos."></textarea>
+          <span class="hint">La IA identificará ingredientes, pasos, tiempos y categoría. Después podrás revisarlo todo antes de guardar.</span>
+        </label>
+      </div>
+      <p id="textoEstado" style="margin-top:10px;font-weight:700;color:var(--muted);font-size:14px;min-height:20px"></p>
+      <div class="form-actions">
+        <button class="btn btn-line" onclick="cerrarImportTexto()">Cancelar</button>
+        <button class="btn btn-accent" id="textoBoton" onclick="procesarTexto()">Estructurar con IA</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal importar de URL -->
+<div class="overlay" id="ovImport">
+  <div class="modal" style="width:min(620px,100%)">
+    <div class="modal-head">
+      <h2>Importar receta de una web</h2>
+      <button class="close-x" onclick="cerrarImportUrl()" aria-label="Cerrar">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <label class="span12">Dirección de la receta
+          <input type="url" id="iUrl" placeholder="https://www.recetasderechupete.com/…">
+          <span class="hint">Funciona con la mayoría de webs de recetas (Directo al Paladar, Recetas de Rechupete, Cookpad…). Se rellenará el formulario para que lo revises antes de guardar.</span>
+        </label>
+      </div>
+      <p id="iEstado" style="margin-top:12px;font-weight:700;color:var(--muted);font-size:14px;min-height:20px"></p>
+      <div class="form-actions">
+        <button class="btn btn-line" onclick="cerrarImportUrl()">Cancelar</button>
+        <button class="btn btn-accent" id="iBoton" onclick="importarDesdeUrl()">Importar receta</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal formulario -->
+<div class="overlay" id="ovForm">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="formTitulo">Nueva receta</h2>
+      <button class="close-x" onclick="cerrarForm()" aria-label="Cerrar">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <label class="span12">Título
+          <input type="text" id="rTitle" placeholder="Ej. Suquet de rape y gambas">
+        </label>
+        <label class="span12">Descripción
+          <textarea id="rDescription" style="min-height:70px" placeholder="Breve presentación del plato…"></textarea>
+        </label>
+        <label class="span6">Categoría
+          <select id="rCategory"></select>
+        </label>
+        <label class="span6">Dificultad
+          <select id="rDifficulty"></select>
+        </label>
+        <label class="span4">Preparación (min)
+          <input type="number" id="rPrep" min="0" value="15">
+        </label>
+        <label class="span4">Cocción (min)
+          <input type="number" id="rCook" min="0" value="30">
+        </label>
+        <label class="span4">Raciones
+          <input type="number" id="rServings" min="1" value="4">
+        </label>
+        <label class="span12">URL de imagen <span class="hint">(opcional, p. ej. enlace de Cloudinary)</span>
+          <input type="url" id="rImageUrl" placeholder="https://…">
+        </label>
+        <label class="span12">Ingredientes <span class="hint">— uno por línea, con cantidad (ej. 500 g de rape)</span>
+          <textarea id="rIngredients"></textarea>
+        </label>
+        <label class="span12">Pasos de elaboración <span class="hint">— uno por línea</span>
+          <textarea id="rSteps" style="min-height:150px"></textarea>
+        </label>
+        <label class="span12">Etiquetas <span class="hint">— separadas por comas (ej. marisco, tradicional, navidad)</span>
+          <input type="text" id="rTags">
+        </label>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-line" onclick="cerrarForm()">Cancelar</button>
+        <button class="btn btn-accent" onclick="guardarReceta()">Guardar receta</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal detalle -->
+<div class="overlay" id="ovDetalle">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="dTitulo"></h2>
+      <button class="close-x" onclick="cerrarDetalle()" aria-label="Cerrar">×</button>
+    </div>
+    <div class="modal-body" id="dBody"></div>
+  </div>
+</div>
+
+<!-- Área de impresión -->
+<div id="printArea"></div>
+
+<!-- Modo cocina -->
+<div class="cocina" id="ovCocina">
+  <div class="top">
+    <span class="c-titulo" id="cTitulo"></span>
+    <span class="c-contador" id="cContador"></span>
+    <button class="close-x" onclick="cerrarCocina()" aria-label="Salir del modo cocina">×</button>
+  </div>
+  <div class="c-paso" id="cPaso"></div>
+  <div class="c-nav">
+    <button class="btn btn-ghost" id="cAnt" onclick="pasoCocina(-1)">← Anterior</button>
+    <button class="btn btn-gold" id="cSig" onclick="pasoCocina(1)">Siguiente →</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+/* ───── Cloudflare Worker (IA para estructurar recetas) ───── */
+const WORKER_URL = 'https://recetario-ia.luengof67.workers.dev/';
+
+/* ───── Firebase (Hablemos de Cocina) ───── */
+const firebaseConfig = {
+  apiKey: "AIzaSyBDk2UB4UNivvtnh4vpqoLYN9-QijdQg7E",
+  authDomain: "hablemos-de-cocina.firebaseapp.com",
+  projectId: "hablemos-de-cocina",
+  storageBucket: "hablemos-de-cocina.firebasestorage.app",
+  messagingSenderId: "667488331445",
+  appId: "1:667488331445:web:0b23e6035ca5591d5e00fc"
+};
+let db = null;
+let auth = null;
+let usuarioActual = null;
+const ADMIN_UID = 'JCmiTHCaELWYyXKATa1Cv6xWYKf1';
+try{
+  if(window.firebase && firebase.apps.length === 0){
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    auth = firebase.auth();
+  }
+}catch(e){
+  console.error('Firebase no disponible', e);
+}
+
+/* ───── Constantes (idénticas a Hablemos de Cocina) ───── */
+const CATEGORIAS = ['Entrantes','Ensaladas','Sopas y cremas','Arroces','Pescados','Carnes','Postres','Salsas','Panadería','Vegetariano','Otros'];
+const DIFICULTADES = ['Fácil','Media','Difícil','Chef'];
+const STORAGE_KEY = 'recetario_hdc_v1';
+
+/* ───── Estado ───── */
+let recetas = [];
+let editandoId = null;
+
+/* ───── Persistencia ───── */
+function cargar(){
+  try{
+    recetas = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+  }catch(e){
+    recetas = [];
+  }
+}
+function guardar(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(recetas));
+  copiaSeguridadAuto();
+}
+
+/* ───── Copia de seguridad automática (silenciosa) ───── */
+let backupTimer = null;
+function copiaSeguridadAuto(){
+  // Solo si hay sesión admin y Firebase disponible
+  if(!db || !usuarioActual || usuarioActual.uid !== ADMIN_UID) return;
+  // Agrupar cambios: espera 3s tras el último guardado para no escribir de más
+  clearTimeout(backupTimer);
+  backupTimer = setTimeout(async () => {
+    try{
+      await db.collection('recetario_backup').doc(ADMIN_UID).set({
+        recetas: recetas,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        total: recetas.length
+      });
+    }catch(e){
+      console.warn('Copia de seguridad no realizada', e);
+    }
+  }, 3000);
+}
+
+async function restaurarDesdeNube(){
+  if(!db){ toast('Firebase no disponible', 'warn'); return; }
+  if(!usuarioActual || usuarioActual.uid !== ADMIN_UID){
+    toast('Inicia sesión de administrador para restaurar', 'warn');
+    abrirLogin();
+    return;
+  }
+  try{
+    const doc = await db.collection('recetario_backup').doc(ADMIN_UID).get();
+    if(!doc.exists){ toast('No hay copia de seguridad en la nube', 'warn'); return; }
+    const datos = doc.data();
+    const copiaRecetas = Array.isArray(datos.recetas) ? datos.recetas : [];
+    if(copiaRecetas.length === 0){ toast('La copia está vacía', 'warn'); return; }
+    if(!confirm('Restaurar ' + copiaRecetas.length + ' recetas de la nube. Esto añadirá las que falten sin borrar las tuyas actuales. ¿Continuar?')) return;
+
+    // Fusionar: añade las que no existan (por id)
+    const idsActuales = new Set(recetas.map(r => r.id));
+    let añadidas = 0;
+    copiaRecetas.forEach(r => {
+      if(r && r.id && !idsActuales.has(r.id)){
+        recetas.push(r);
+        añadidas++;
+      }
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(recetas));
+    render();
+    toast(añadidas + (añadidas === 1 ? ' receta restaurada' : ' recetas restauradas'));
+  }catch(e){
+    console.error(e);
+    toast('Error al restaurar: ' + (e.message || ''), 'warn');
+  }
+}
+
+/* ───── Utilidades ───── */
+function uid(){
+  return (crypto.randomUUID ? crypto.randomUUID() : 'r' + Date.now() + Math.random().toString(36).slice(2,8));
+}
+function esc(s){
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function tiempoLabel(r){
+  const t = (r.prepMinutes||0) + (r.cookMinutes||0);
+  if(t < 60) return t + ' min';
+  const h = Math.floor(t/60), m = t % 60;
+  return m === 0 ? h + ' h' : h + ' h ' + m + ' min';
+}
+function toast(msg, tipo){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show ' + (tipo || 'ok');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+/* ───── Render ───── */
+function llenarSelects(){
+  const fC = document.getElementById('fCategoria');
+  const fD = document.getElementById('fDificultad');
+  const rC = document.getElementById('rCategory');
+  const rD = document.getElementById('rDifficulty');
+  CATEGORIAS.forEach(c => {
+    fC.insertAdjacentHTML('beforeend', `<option value="${esc(c)}">${esc(c)}</option>`);
+    rC.insertAdjacentHTML('beforeend', `<option value="${esc(c)}">${esc(c)}</option>`);
+  });
+  DIFICULTADES.forEach(d => {
+    fD.insertAdjacentHTML('beforeend', `<option value="${esc(d)}">${esc(d)}</option>`);
+    rD.insertAdjacentHTML('beforeend', `<option value="${esc(d)}">${esc(d)}</option>`);
+  });
+}
+
+function render(){
+  const q = document.getElementById('buscar').value.trim().toLowerCase();
+  const fc = document.getElementById('fCategoria').value;
+  const fd = document.getElementById('fDificultad').value;
+
+  const lista = recetas.filter(r => {
+    if(fc && r.category !== fc) return false;
+    if(fd && r.difficulty !== fd) return false;
+    if(q){
+      const blob = (r.title + ' ' + (r.ingredients||[]).join(' ') + ' ' + (r.tags||[]).join(' ')).toLowerCase();
+      if(!blob.includes(q)) return false;
+    }
+    return true;
+  }).sort((a,b) => (b.updatedAt||'').localeCompare(a.updatedAt||''));
+
+  const grid = document.getElementById('grid');
+  document.getElementById('contador').textContent =
+    lista.length + ' de ' + recetas.length + (recetas.length === 1 ? ' receta' : ' recetas');
+
+  if(lista.length === 0){
+    grid.innerHTML = recetas.length === 0
+      ? `<div class="empty"><div class="icon">🍳</div><h2>Tu recetario está vacío</h2><p>Pulsa <strong>+ Nueva receta</strong> para añadir la primera.</p></div>`
+      : `<div class="empty"><div class="icon">🔍</div><h2>Sin resultados</h2><p>Prueba con otra búsqueda u otros filtros.</p></div>`;
+    return;
+  }
+
+  grid.innerHTML = lista.map(r => `
+    <article class="card" tabindex="0" role="button"
+      onclick="abrirDetalle('${r.id}')"
+      onkeydown="if(event.key==='Enter')abrirDetalle('${r.id}')">
+      <div class="photo" ${r.imageUrl ? `style="background-image:url('${esc(r.imageUrl)}')"` : ''}>${r.imageUrl ? '' : '🍴'}</div>
+      <div class="body">
+        <h3>${esc(r.title)}</h3>
+        <div class="chips">
+          <span class="chip chip-cat">${esc(r.category)}</span>
+          <span class="chip chip-dif">${esc(r.difficulty)}</span>
+          ${r.publishedToHdC ? '<span class="chip chip-pub">✓ En la app</span>' : '<span class="chip chip-bor">Borrador</span>'}
+        </div>
+        <div class="meta">
+          <span>⏱ ${tiempoLabel(r)}</span>
+          <span>👥 ${r.servings} rac.</span>
+          <span>📋 ${(r.ingredients||[]).length} ingr.</span>
+        </div>
+      </div>
+    </article>
+  `).join('');
+}
+
+/* ───── Formulario ───── */
+function abrirForm(id){
+  editandoId = id || null;
+  document.getElementById('formTitulo').textContent = editandoId ? 'Editar receta' : 'Nueva receta';
+  const r = editandoId ? recetas.find(x => x.id === editandoId) : null;
+
+  document.getElementById('rTitle').value = r ? r.title : '';
+  document.getElementById('rDescription').value = r ? r.description : '';
+  document.getElementById('rCategory').value = r ? r.category : 'Entrantes';
+  document.getElementById('rDifficulty').value = r ? r.difficulty : 'Fácil';
+  document.getElementById('rPrep').value = r ? r.prepMinutes : 15;
+  document.getElementById('rCook').value = r ? r.cookMinutes : 30;
+  document.getElementById('rServings').value = r ? r.servings : 4;
+  document.getElementById('rImageUrl').value = (r && r.imageUrl) ? r.imageUrl : '';
+  document.getElementById('rIngredients').value = r ? (r.ingredients||[]).join('\n') : '';
+  document.getElementById('rSteps').value = r ? (r.steps||[]).join('\n') : '';
+  document.getElementById('rTags').value = r ? (r.tags||[]).join(', ') : '';
+
+  cerrarDetalle();
+  document.getElementById('ovForm').classList.add('open');
+  document.getElementById('rTitle').focus();
+}
+function cerrarForm(){
+  document.getElementById('ovForm').classList.remove('open');
+  editandoId = null;
+}
+
+function guardarReceta(){
+  const title = document.getElementById('rTitle').value.trim();
+  if(!title){ toast('La receta necesita un título', 'warn'); return; }
+
+  const ingredients = document.getElementById('rIngredients').value
+    .split('\n').map(s => s.trim()).filter(Boolean);
+  const steps = document.getElementById('rSteps').value
+    .split('\n').map(s => s.trim()).filter(Boolean);
+  if(ingredients.length === 0){ toast('Añade al menos un ingrediente', 'warn'); return; }
+  if(steps.length === 0){ toast('Añade al menos un paso', 'warn'); return; }
+
+  const tags = document.getElementById('rTags').value
+    .split(',').map(s => s.trim()).filter(Boolean);
+  const imageUrl = document.getElementById('rImageUrl').value.trim() || null;
+  const ahora = new Date().toISOString();
+
+  const datos = {
+    title,
+    description: document.getElementById('rDescription').value.trim(),
+    category: document.getElementById('rCategory').value,
+    difficulty: document.getElementById('rDifficulty').value,
+    prepMinutes: Math.max(0, parseInt(document.getElementById('rPrep').value) || 0),
+    cookMinutes: Math.max(0, parseInt(document.getElementById('rCook').value) || 0),
+    servings: Math.max(1, parseInt(document.getElementById('rServings').value) || 1),
+    ingredients,
+    steps,
+    imageUrl,
+    tags,
+    updatedAt: ahora
+  };
+
+  if(editandoId){
+    const i = recetas.findIndex(x => x.id === editandoId);
+    if(i > -1) recetas[i] = { ...recetas[i], ...datos };
+    toast('Receta actualizada');
+  }else{
+    recetas.push({
+      id: uid(),
+      ...datos,
+      createdAt: ahora,
+      isPublished: true,
+      status: 'approved',
+      authorId: null,
+      authorName: null
+    });
+    toast('Receta guardada');
+  }
+  guardar();
+  cerrarForm();
+  render();
+}
+
+/* ───── Detalle (con calculadora de raciones) ───── */
+let detalleId = null;
+let racionesActuales = 4;
+
+function formatearNum(n){
+  const r = Math.round(n * 100) / 100;
+  return Number.isInteger(r) ? String(r) : String(r).replace('.', ',');
+}
+
+function escalarIngrediente(texto, factor){
+  if(factor === 1) return texto;
+  return texto.replace(/(\d+(?:[.,]\d+)?)(\s*\/\s*(\d+(?:[.,]\d+)?))?/g, (m, a, frac, b) => {
+    let val = parseFloat(a.replace(',', '.'));
+    if(frac) val = val / parseFloat(b.replace(',', '.'));
+    if(!isFinite(val)) return m;
+    return formatearNum(val * factor);
+  });
+}
+
+function abrirDetalle(id){
+  const r = recetas.find(x => x.id === id);
+  if(!r) return;
+  detalleId = id;
+  racionesActuales = r.servings;
+  renderDetalle();
+  document.getElementById('ovDetalle').classList.add('open');
+}
+
+function cambiarRaciones(delta){
+  racionesActuales = Math.max(1, racionesActuales + delta);
+  renderDetalle();
+}
+
+function renderDetalle(){
+  const r = recetas.find(x => x.id === detalleId);
+  if(!r) return;
+  const factor = racionesActuales / (r.servings || 1);
+  document.getElementById('dTitulo').textContent = r.title;
+  document.getElementById('dBody').innerHTML = `
+    <div class="detail-photo" ${r.imageUrl ? `style="background-image:url('${esc(r.imageUrl)}')"` : ''}>${r.imageUrl ? '' : '🍴'}</div>
+    <div class="chips">
+      <span class="chip chip-cat">${esc(r.category)}</span>
+      <span class="chip chip-dif">${esc(r.difficulty)}</span>
+    </div>
+    ${r.description ? `<p class="detail-desc">${esc(r.description)}</p>` : ''}
+    <div class="detail-meta">
+      <div class="box"><div class="v">${r.prepMinutes} min</div><div class="k">Preparación</div></div>
+      <div class="box"><div class="v">${r.cookMinutes} min</div><div class="k">Cocción</div></div>
+      <div class="box"><div class="v">${tiempoLabel(r)}</div><div class="k">Total</div></div>
+      <div class="box">
+        <div class="serv-control">
+          <button class="serv-btn" onclick="cambiarRaciones(-1)" aria-label="Menos raciones">−</button>
+          <div class="v">${racionesActuales}</div>
+          <button class="serv-btn" onclick="cambiarRaciones(1)" aria-label="Más raciones">+</button>
+        </div>
+        <div class="k">Raciones</div>
+      </div>
+    </div>
+    <h3 class="section-title">Ingredientes</h3>
+    ${factor !== 1 ? `<span class="nota-escala">Cantidades ajustadas de ${r.servings} a ${racionesActuales} raciones</span>` : ''}
+    <ul class="ing">${(r.ingredients||[]).map(i => `<li>${esc(escalarIngrediente(i, factor))}</li>`).join('')}</ul>
+    <h3 class="section-title">Elaboración</h3>
+    <ol class="steps">${(r.steps||[]).map(p => `<li>${esc(p)}</li>`).join('')}</ol>
+    ${(r.tags||[]).length ? `<div class="tags-row">${r.tags.map(t => `<span class="tag">#${esc(t)}</span>`).join('')}</div>` : ''}
+    <div class="form-actions" style="margin-top:26px">
+      <button class="btn btn-danger" onclick="eliminarReceta('${r.id}')">Eliminar</button>
+      <button class="btn btn-line" onclick="duplicarReceta('${r.id}')">⧉ Duplicar</button>
+      <button class="btn btn-line" onclick="imprimirReceta()">🖨 Imprimir</button>
+      <button class="btn btn-wa" onclick="compartirWhatsApp()">📱 WhatsApp</button>
+      <button class="btn btn-wa" onclick="compartirPdf()">📄 PDF</button>
+      <button class="btn btn-line" onclick="exportarUna('${r.id}')">⬇ JSON</button>
+      <button class="btn btn-gold" onclick="abrirCocina()">👨‍🍳 Modo cocina</button>
+      <button class="btn btn-accent" onclick="abrirForm('${r.id}')">✎ Editar</button>
+      <button class="btn btn-gold" id="btnPublicar" onclick="publicarEnHdC('${r.id}')">${r.publishedToHdC ? '✓ Actualizar en la app' : '☁ Publicar en Hablemos de Cocina'}</button>
+    </div>
+  `;
+}
+function cerrarDetalle(){
+  document.getElementById('ovDetalle').classList.remove('open');
+}
+
+/* ───── Duplicar ───── */
+function duplicarReceta(id){
+  const r = recetas.find(x => x.id === id);
+  if(!r) return;
+  const ahora = new Date().toISOString();
+  const copia = {
+    ...r,
+    id: uid(),
+    title: r.title + ' (copia)',
+    createdAt: ahora,
+    updatedAt: ahora
+  };
+  recetas.push(copia);
+  guardar();
+  render();
+  toast('Receta duplicada');
+  abrirForm(copia.id);
+}
+
+/* ───── Imprimir ───── */
+function imprimirReceta(){
+  const r = recetas.find(x => x.id === detalleId);
+  if(!r) return;
+  const factor = racionesActuales / (r.servings || 1);
+  document.getElementById('printArea').innerHTML = `
+    <h1>${esc(r.title)}</h1>
+    <div class="pmeta">
+      ${esc(r.category)} · ${esc(r.difficulty)} · Preparación: ${r.prepMinutes} min · Cocción: ${r.cookMinutes} min · ${racionesActuales} raciones${factor !== 1 ? ' (ajustado de ' + r.servings + ')' : ''}
+    </div>
+    ${r.description ? `<p class="pdesc">${esc(r.description)}</p>` : ''}
+    <h2>Ingredientes</h2>
+    <ul>${(r.ingredients||[]).map(i => `<li>${esc(escalarIngrediente(i, factor))}</li>`).join('')}</ul>
+    <h2>Elaboración</h2>
+    <ol>${(r.steps||[]).map(p => `<li>${esc(p)}</li>`).join('')}</ol>
+    <div class="pfoot">Mi Recetario · Hablemos de Cocina</div>
+  `;
+  window.print();
+}
+
+/* ───── Sesión de administrador ───── */
+function actualizarEstadoSesion(){
+  const el = document.getElementById('sesionEstado');
+  if(!el) return;
+  if(!auth){ el.style.display = 'none'; return; }
+  if(usuarioActual){
+    el.className = 'sesion-estado on';
+    el.textContent = '● Admin';
+    el.title = 'Sesión iniciada como ' + usuarioActual.email + ' · pulsa para cerrar sesión';
+  }else{
+    el.className = 'sesion-estado off';
+    el.textContent = '○ Iniciar sesión';
+    el.title = 'Inicia sesión para publicar';
+  }
+}
+
+function gestionarSesion(){
+  if(usuarioActual){
+    if(confirm('¿Cerrar la sesión de administrador?')){
+      auth.signOut();
+      toast('Sesión cerrada');
+    }
+  }else{
+    abrirLogin();
+  }
+}
+
+function abrirLogin(){
+  document.getElementById('loginError').textContent = '';
+  document.getElementById('loginPass').value = '';
+  if(!document.getElementById('loginEmail').value){
+    document.getElementById('loginEmail').value = 'luengof67@gmail.com';
+  }
+  document.getElementById('ovLogin').classList.add('open');
+  setTimeout(() => document.getElementById('loginPass').focus(), 50);
+}
+function cerrarLogin(){
+  document.getElementById('ovLogin').classList.remove('open');
+}
+
+async function hacerLogin(){
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  const err = document.getElementById('loginError');
+  const btn = document.getElementById('loginBtn');
+  err.textContent = '';
+  if(!email || !pass){ err.textContent = 'Introduce email y contraseña'; return; }
+  if(!auth){ err.textContent = 'Firebase no disponible'; return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Entrando…';
+  try{
+    await auth.signInWithEmailAndPassword(email, pass);
+    cerrarLogin();
+    toast('Sesión iniciada como administrador');
+  }catch(e){
+    const msg = {
+      'auth/invalid-credential': 'Email o contraseña incorrectos',
+      'auth/wrong-password': 'Contraseña incorrecta',
+      'auth/user-not-found': 'No existe esa cuenta',
+      'auth/invalid-email': 'El email no es válido',
+      'auth/too-many-requests': 'Demasiados intentos, espera un momento',
+      'auth/network-request-failed': 'Sin conexión a internet'
+    }[e.code] || ('Error: ' + (e.message || e.code));
+    err.textContent = msg;
+  }finally{
+    btn.disabled = false;
+    btn.textContent = 'Iniciar sesión';
+  }
+}
+
+// Escuchar cambios de sesión (persiste entre recargas)
+if(auth){
+  auth.onAuthStateChanged(user => {
+    const antesNoHabia = !usuarioActual;
+    usuarioActual = user;
+    actualizarEstadoSesion();
+    if(document.getElementById('ovDetalle').classList.contains('open')){
+      renderDetalle();
+    }
+    // Al iniciar sesión, hacer copia de lo que haya en local
+    if(user && user.uid === ADMIN_UID && antesNoHabia){
+      copiaSeguridadAuto();
+    }
+  });
+}
+
+/* ───── Publicar en Hablemos de Cocina (Firestore) ───── */
+async function publicarEnHdC(id){
+  const r = recetas.find(x => x.id === id);
+  if(!r) return;
+  if(!db){
+    toast('Firebase no está disponible (¿sin conexión?)', 'warn');
+    return;
+  }
+  if(!usuarioActual){
+    toast('Inicia sesión de administrador para publicar', 'warn');
+    abrirLogin();
+    return;
+  }
+  if(usuarioActual.uid !== ADMIN_UID){
+    toast('Esta cuenta no tiene permisos de administrador', 'warn');
+    return;
+  }
+
+  const boton = document.getElementById('btnPublicar');
+  if(boton){ boton.disabled = true; boton.textContent = 'Publicando…'; }
+
+  const datos = {
+    title: r.title,
+    description: r.description || '',
+    category: r.category,
+    difficulty: r.difficulty,
+    prepMinutes: r.prepMinutes,
+    cookMinutes: r.cookMinutes,
+    servings: r.servings,
+    ingredients: r.ingredients || [],
+    steps: r.steps || [],
+    imageUrl: r.imageUrl || null,
+    tags: r.tags || [],
+    isPublished: true,
+    status: 'approved',
+    authorId: null,
+    authorName: null,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  };
+
+  try{
+    if(r.hdcDocId){
+      // Ya publicada: actualizar el documento existente
+      await db.collection('recipes').doc(r.hdcDocId).update(datos);
+      toast('Receta actualizada en Hablemos de Cocina');
+    }else{
+      // Primera publicación: crear documento nuevo
+      datos.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      const ref = await db.collection('recipes').add(datos);
+      r.hdcDocId = ref.id;
+      r.publishedToHdC = true;
+      guardar();
+      toast('¡Receta publicada en Hablemos de Cocina!');
+    }
+    renderDetalle();
+    render();
+  }catch(e){
+    console.error(e);
+    toast('Error al publicar: ' + (e.message || 'inténtalo de nuevo'), 'warn');
+    if(boton){ boton.disabled = false; }
+    renderDetalle();
+  }
+}
+
+/* ───── Compartir por WhatsApp ───── */
+function compartirWhatsApp(){
+  const r = recetas.find(x => x.id === detalleId);
+  if(!r) return;
+  const factor = racionesActuales / (r.servings || 1);
+
+  let texto = '🍳 *' + r.title.toUpperCase() + '*\n';
+  texto += r.category + ' · ' + r.difficulty + '\n';
+  texto += '⏱ Preparación ' + r.prepMinutes + ' min · Cocción ' + r.cookMinutes + ' min · 👥 ' + racionesActuales + ' raciones\n';
+  if(r.description) texto += '\n_' + r.description + '_\n';
+
+  texto += '\n*INGREDIENTES*\n';
+  (r.ingredients || []).forEach(i => {
+    texto += '• ' + escalarIngrediente(i, factor) + '\n';
+  });
+
+  texto += '\n*ELABORACIÓN*\n';
+  (r.steps || []).forEach((p, idx) => {
+    texto += (idx + 1) + '. ' + p + '\n';
+  });
+
+  if((r.tags || []).length) texto += '\n' + r.tags.map(t => '#' + t.replace(/\s+/g, '')).join(' ') + '\n';
+  texto += '\n_Compartido desde Mi Recetario · Hablemos de Cocina_';
+
+  window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank');
+}
+
+/* ───── PDF (jsPDF) ───── */
+function generarPdf(r, factor){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const ancho = 210, margen = 18, util = ancho - margen * 2;
+  let y = 0;
+
+  // Cabecera marrón con título
+  doc.setFillColor(44, 24, 16);
+  doc.rect(0, 0, ancho, 34, 'F');
+  doc.setTextColor(212, 168, 83);
+  doc.setFont('times', 'bold');
+  doc.setFontSize(20);
+  const lineasTitulo = doc.splitTextToSize(r.title, util);
+  doc.text(lineasTitulo, margen, 15);
+  doc.setTextColor(250, 247, 242);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.text(r.category + '  ·  ' + r.difficulty + '  ·  Prep. ' + r.prepMinutes + ' min  ·  Cocción ' + r.cookMinutes + ' min  ·  ' + racionesActuales + ' raciones', margen, 29);
+  y = 44;
+
+  function saltoSiHaceFalta(alto){
+    if(y + alto > 282){ doc.addPage(); y = 20; }
+  }
+  function seccion(titulo){
+    saltoSiHaceFalta(14);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.setTextColor(44, 24, 16);
+    doc.text(titulo, margen, y);
+    doc.setDrawColor(212, 168, 83);
+    doc.setLineWidth(0.6);
+    doc.line(margen, y + 1.8, ancho - margen, y + 1.8);
+    y += 9;
+  }
+  function parrafo(texto, sangria, prefijo){
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10.5);
+    doc.setTextColor(35, 30, 25);
+    const lineas = doc.splitTextToSize(texto, util - sangria);
+    saltoSiHaceFalta(lineas.length * 5 + 2);
+    if(prefijo){
+      doc.setFont('helvetica', 'bold');
+      doc.text(prefijo, margen, y);
+      doc.setFont('helvetica', 'normal');
+    }
+    doc.text(lineas, margen + sangria, y);
+    y += lineas.length * 5 + 2;
+  }
+
+  if(r.description){
+    doc.setFont('times', 'italic');
+    doc.setFontSize(11);
+    doc.setTextColor(90, 75, 65);
+    const lineasDesc = doc.splitTextToSize(r.description, util);
+    doc.text(lineasDesc, margen, y);
+    y += lineasDesc.length * 5.5 + 4;
+  }
+
+  seccion('INGREDIENTES');
+  if(factor !== 1){
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(9.5);
+    doc.setTextColor(138, 102, 32);
+    doc.text('Cantidades ajustadas de ' + r.servings + ' a ' + racionesActuales + ' raciones', margen, y);
+    y += 6;
+  }
+  (r.ingredients || []).forEach(i => {
+    parrafo(escalarIngrediente(i, factor), 6, '•');
+  });
+
+  y += 3;
+  seccion('ELABORACIÓN');
+  (r.steps || []).forEach((p, idx) => {
+    parrafo(p, 9, (idx + 1) + '.');
+  });
+
+  // Pie en todas las páginas
+  const paginas = doc.getNumberOfPages();
+  for(let i = 1; i <= paginas; i++){
+    doc.setPage(i);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(150, 140, 130);
+    doc.text('Mi Recetario · Hablemos de Cocina', margen, 291);
+    doc.text('Página ' + i + ' de ' + paginas, ancho - margen, 291, { align: 'right' });
+  }
+  return doc;
+}
+
+async function compartirPdf(){
+  const r = recetas.find(x => x.id === detalleId);
+  if(!r) return;
+  if(!window.jspdf){ toast('No se pudo cargar el generador de PDF (¿sin conexión?)', 'warn'); return; }
+  const factor = racionesActuales / (r.servings || 1);
+  const doc = generarPdf(r, factor);
+  const nombre = nombreArchivo(r.title) + '.pdf';
+  const blob = doc.output('blob');
+  const archivo = new File([blob], nombre, { type: 'application/pdf' });
+
+  if(navigator.canShare && navigator.canShare({ files: [archivo] })){
+    try{
+      await navigator.share({ files: [archivo], title: r.title });
+      return;
+    }catch(e){
+      if(e.name === 'AbortError') return; // el usuario canceló
+    }
+  }
+  doc.save(nombre);
+  toast('PDF descargado: adjúntalo en WhatsApp');
+}
+
+/* ───── Modo cocina ───── */
+let pasoActual = 0;
+let wakeLock = null;
+
+async function pedirWakeLock(){
+  try{
+    if('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
+  }catch(e){ wakeLock = null; }
+}
+function soltarWakeLock(){
+  if(wakeLock){ wakeLock.release().catch(()=>{}); wakeLock = null; }
+}
+
+function abrirCocina(){
+  const r = recetas.find(x => x.id === detalleId);
+  if(!r || (r.steps||[]).length === 0){ toast('Esta receta no tiene pasos', 'warn'); return; }
+  pasoActual = 0;
+  document.getElementById('cTitulo').textContent = r.title;
+  renderCocina();
+  document.getElementById('ovCocina').classList.add('open');
+  pedirWakeLock();
+}
+function pasoCocina(delta){
+  const r = recetas.find(x => x.id === detalleId);
+  if(!r) return;
+  const total = r.steps.length;
+  if(delta > 0 && pasoActual === total - 1){ cerrarCocina(); return; }
+  pasoActual = Math.min(total - 1, Math.max(0, pasoActual + delta));
+  renderCocina();
+}
+function renderCocina(){
+  const r = recetas.find(x => x.id === detalleId);
+  if(!r) return;
+  const total = r.steps.length;
+  document.getElementById('cContador').textContent = 'PASO ' + (pasoActual + 1) + ' DE ' + total;
+  document.getElementById('cPaso').textContent = r.steps[pasoActual];
+  document.getElementById('cAnt').disabled = (pasoActual === 0);
+  document.getElementById('cSig').textContent = (pasoActual === total - 1) ? 'Terminar ✓' : 'Siguiente →';
+}
+function cerrarCocina(){
+  document.getElementById('ovCocina').classList.remove('open');
+  soltarWakeLock();
+}
+
+function eliminarReceta(id){
+  const r = recetas.find(x => x.id === id);
+  if(!r) return;
+  if(!confirm('¿Eliminar la receta "' + r.title + '"? Esta acción no se puede deshacer.')) return;
+  recetas = recetas.filter(x => x.id !== id);
+  guardar();
+  cerrarDetalle();
+  render();
+  toast('Receta eliminada');
+}
+
+/* ───── Exportación (formato Hablemos de Cocina) ───── */
+function aFormatoHdC(r){
+  return {
+    title: r.title,
+    description: r.description || '',
+    category: r.category,
+    difficulty: r.difficulty,
+    prepMinutes: r.prepMinutes,
+    cookMinutes: r.cookMinutes,
+    servings: r.servings,
+    ingredients: r.ingredients || [],
+    steps: r.steps || [],
+    imageUrl: r.imageUrl || null,
+    tags: r.tags || [],
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+    isPublished: true,
+    status: 'approved',
+    authorId: r.authorId || null,
+    authorName: r.authorName || null
+  };
+}
+function descargar(nombre, contenido){
+  const blob = new Blob([contenido], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = nombre;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function nombreArchivo(s){
+  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,50) || 'receta';
+}
+function exportarUna(id){
+  const r = recetas.find(x => x.id === id);
+  if(!r) return;
+  descargar(nombreArchivo(r.title) + '.json', JSON.stringify(aFormatoHdC(r), null, 2));
+  toast('Receta exportada en formato Hablemos de Cocina');
+}
+function exportarTodo(){
+  if(recetas.length === 0){ toast('No hay recetas que exportar', 'warn'); return; }
+  const hoy = new Date().toISOString().slice(0,10);
+  descargar('recetario-hdc-' + hoy + '.json', JSON.stringify(recetas.map(aFormatoHdC), null, 2));
+  toast(recetas.length + ' recetas exportadas');
+}
+
+/* ───── Importar copia de seguridad ───── */
+function importarCopia(ev){
+  const file = ev.target.files[0];
+  ev.target.value = '';
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const datos = JSON.parse(reader.result);
+      const lista = Array.isArray(datos) ? datos : [datos];
+      let nuevas = 0;
+      lista.forEach(r => {
+        if(!r || !r.title) return;
+        recetas.push({
+          id: uid(),
+          title: String(r.title),
+          description: String(r.description || ''),
+          category: CATEGORIAS.includes(r.category) ? r.category : 'Otros',
+          difficulty: DIFICULTADES.includes(r.difficulty) ? r.difficulty : 'Fácil',
+          prepMinutes: parseInt(r.prepMinutes) || 0,
+          cookMinutes: parseInt(r.cookMinutes) || 0,
+          servings: parseInt(r.servings) || 4,
+          ingredients: Array.isArray(r.ingredients) ? r.ingredients.map(String) : [],
+          steps: Array.isArray(r.steps) ? r.steps.map(String) : [],
+          imageUrl: r.imageUrl || null,
+          tags: Array.isArray(r.tags) ? r.tags.map(String) : [],
+          createdAt: r.createdAt || new Date().toISOString(),
+          updatedAt: r.updatedAt || new Date().toISOString(),
+          isPublished: true,
+          status: 'approved',
+          authorId: r.authorId || null,
+          authorName: r.authorName || null
+        });
+        nuevas++;
+      });
+      guardar();
+      render();
+      toast(nuevas + (nuevas === 1 ? ' receta importada' : ' recetas importadas'));
+    }catch(e){
+      toast('El archivo no es un JSON válido', 'warn');
+    }
+  };
+  reader.readAsText(file);
+}
+
+/* ───── Importar desde URL (schema.org/Recipe) ───── */
+function abrirImportUrl(){
+  document.getElementById('iUrl').value = '';
+  document.getElementById('iEstado').textContent = '';
+  document.getElementById('iBoton').disabled = false;
+  document.getElementById('ovImport').classList.add('open');
+  document.getElementById('iUrl').focus();
+}
+function cerrarImportUrl(){
+  document.getElementById('ovImport').classList.remove('open');
+}
+function estadoImport(msg){
+  document.getElementById('iEstado').textContent = msg;
+}
+
+async function importarDesdeUrl(){
+  const url = document.getElementById('iUrl').value.trim();
+  if(!/^https?:\/\/.+\..+/.test(url)){
+    toast('Pega una dirección válida (https://…)', 'warn');
+    return;
+  }
+  const boton = document.getElementById('iBoton');
+  boton.disabled = true;
+
+  estadoImport('Descargando la página…');
+  const proxies = [
+    u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
+    u => 'https://corsproxy.io/?url=' + encodeURIComponent(u)
+  ];
+  let html = null;
+  for(const proxy of proxies){
+    try{
+      const res = await fetch(proxy(url));
+      if(res.ok){
+        const texto = await res.text();
+        if(texto && texto.length > 300){ html = texto; break; }
+      }
+    }catch(e){ /* probar el siguiente proxy */ }
+  }
+  if(!html){
+    estadoImport('');
+    boton.disabled = false;
+    toast('No se pudo descargar la página. Prueba otra vez o con otra web.', 'warn');
+    return;
+  }
+
+  estadoImport('Buscando la receta en la página…');
+  let receta = null;
+  try{ receta = extraerReceta(html); }catch(e){ receta = null; }
+
+  // Si no hay datos estructurados, reintentar con IA usando el texto visible
+  if(!receta || !receta.title || receta.ingredients.length === 0){
+    estadoImport('Sin datos estructurados. Probando con IA…');
+    const textoPlano = htmlATexto(html);
+    if(textoPlano.length > 100){
+      try{
+        receta = await estructurarConIA({ texto: textoPlano.slice(0, 12000) });
+      }catch(e){ receta = null; }
+    }
+  }
+  boton.disabled = false;
+
+  if(!receta || !receta.title || (receta.ingredients||[]).length === 0){
+    estadoImport('');
+    toast('No se pudo extraer la receta de esa página', 'warn');
+    return;
+  }
+
+  cerrarImportUrl();
+  abrirFormCon(receta);
+  toast('Receta importada: revisa los datos y guarda');
+}
+
+/* ───── Estructurar con IA (Cloudflare Worker) ───── */
+async function estructurarConIA(payload){
+  const res = await fetch(WORKER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if(!res.ok){
+    let msg = 'Error del servicio de IA';
+    try{ const e = await res.json(); if(e.error) msg = e.error; }catch(_){}
+    throw new Error(msg);
+  }
+  const receta = await res.json();
+  if(!receta || !receta.title) throw new Error('La IA no devolvió una receta válida');
+  // Asegurar imageUrl y tags presentes para el formulario
+  receta.imageUrl = receta.imageUrl || null;
+  receta.tags = receta.tags || [];
+  return receta;
+}
+
+function htmlATexto(html){
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  doc.querySelectorAll('script,style,noscript,svg,header,footer,nav').forEach(el => el.remove());
+  return (doc.body ? doc.body.textContent : '').replace(/\s+/g, ' ').trim();
+}
+
+/* ───── Importar pegando texto ───── */
+function abrirImportTexto(){
+  document.getElementById('textoReceta').value = '';
+  document.getElementById('textoEstado').textContent = '';
+  document.getElementById('textoBoton').disabled = false;
+  document.getElementById('ovTexto').classList.add('open');
+  setTimeout(() => document.getElementById('textoReceta').focus(), 50);
+}
+function cerrarImportTexto(){
+  document.getElementById('ovTexto').classList.remove('open');
+}
+async function procesarTexto(){
+  const texto = document.getElementById('textoReceta').value.trim();
+  if(texto.length < 20){ toast('Pega una receta un poco más completa', 'warn'); return; }
+  const boton = document.getElementById('textoBoton');
+  const estado = document.getElementById('textoEstado');
+  boton.disabled = true;
+  estado.textContent = 'La IA está ordenando la receta…';
+  try{
+    const receta = await estructurarConIA({ texto: texto.slice(0, 12000) });
+    cerrarImportTexto();
+    abrirFormCon(receta);
+    toast('Receta estructurada: revisa y guarda');
+  }catch(e){
+    estado.textContent = '';
+    toast(e.message || 'No se pudo estructurar la receta', 'warn');
+  }finally{
+    boton.disabled = false;
+  }
+}
+
+/* ───── Importar desde foto ───── */
+async function importarDesdeFoto(ev){
+  const file = ev.target.files[0];
+  ev.target.value = '';
+  if(!file) return;
+  if(!file.type.startsWith('image/')){ toast('Selecciona una imagen', 'warn'); return; }
+
+  toast('Leyendo la foto con IA…');
+  try{
+    const imagenBase64 = await comprimirImagen(file);
+    const receta = await estructurarConIA({ imagenBase64 });
+    abrirFormCon(receta);
+    toast('Receta leída de la foto: revisa y guarda');
+  }catch(e){
+    toast(e.message || 'No se pudo leer la receta de la foto', 'warn');
+  }
+}
+
+// Reduce el tamaño de la imagen antes de enviarla (más rápido y barato)
+function comprimirImagen(file){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const max = 1400;
+      let { width, height } = img;
+      if(width > max || height > max){
+        if(width >= height){ height = Math.round(height * max / width); width = max; }
+        else{ width = Math.round(width * max / height); height = max; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('No se pudo leer la imagen')); };
+    img.src = url;
+  });
+}
+
+function extraerReceta(html){
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const scripts = doc.querySelectorAll('script[type="application/ld+json"]');
+  for(const s of scripts){
+    let data = null;
+    try{ data = JSON.parse(s.textContent); }catch(e){ continue; }
+    const obj = buscarRecipe(data);
+    if(obj) return mapearRecipe(obj);
+  }
+  return null;
+}
+
+function buscarRecipe(data){
+  if(!data) return null;
+  if(Array.isArray(data)){
+    for(const d of data){ const r = buscarRecipe(d); if(r) return r; }
+    return null;
+  }
+  if(typeof data !== 'object') return null;
+  const tipos = Array.isArray(data['@type']) ? data['@type'] : [data['@type']];
+  if(tipos.includes('Recipe')) return data;
+  if(data['@graph']) return buscarRecipe(data['@graph']);
+  return null;
+}
+
+function limpiarTexto(s){
+  const t = document.createElement('textarea');
+  t.innerHTML = String(s ?? '').replace(/<[^>]*>/g, ' ');
+  return t.value.replace(/\s+/g, ' ').trim();
+}
+
+function isoAMinutos(iso){
+  if(!iso || typeof iso !== 'string') return 0;
+  const m = iso.match(/P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?/i);
+  if(!m) return 0;
+  return (parseInt(m[1]) || 0) * 1440 + (parseInt(m[2]) || 0) * 60 + (parseInt(m[3]) || 0);
+}
+
+function adivinarCategoria(d, titulo){
+  const texto = (limpiarTexto(Array.isArray(d.recipeCategory) ? d.recipeCategory.join(' ') : d.recipeCategory) + ' ' + titulo).toLowerCase();
+  const reglas = [
+    ['Postres',        /postre|tarta|bizcocho|flan|helado|galleta|mousse|dulce|brownie|crep|natilla|torrija/],
+    ['Ensaladas',      /ensalada/],
+    ['Sopas y cremas', /sopa|crema de|gazpacho|salmorejo|caldo|pur[eé]|consom[eé]/],
+    ['Arroces',        /arroz|paella|risotto|fideu[aá]/],
+    ['Salsas',         /salsa|alioli|mayonesa|vinagreta|pesto/],
+    ['Panadería',      /\bpan\b|masa madre|brioche|focaccia|hojaldre|empanada|pizza|boller[ií]a/],
+    ['Pescados',       /pescado|merluza|bacalao|salm[oó]n|rape|lubina|dorada|at[uú]n|sardina|boquer[oó]n|marisco|gamba|pulpo|calamar|mejill[oó]n|almeja|sepia/],
+    ['Carnes',         /carne|pollo|ternera|cerdo|cordero|conejo|pavo|solomillo|costilla|albóndiga|alb[oó]ndiga|estofado|guiso de carne/],
+    ['Vegetariano',    /vegetarian|vegan|verdura|tofu/],
+    ['Entrantes',      /entrante|aperitivo|tapa|croqueta|montadito|canap[eé]/]
+  ];
+  for(const [cat, re] of reglas){
+    if(re.test(texto)) return cat;
+  }
+  return 'Otros';
+}
+
+function mapearRecipe(d){
+  // Ingredientes
+  const brutoIng = d.recipeIngredient || d.ingredients || [];
+  const ingredients = (Array.isArray(brutoIng) ? brutoIng : [brutoIng])
+    .map(limpiarTexto).filter(Boolean);
+
+  // Pasos (string, array, HowToStep, HowToSection)
+  const steps = [];
+  (function sacarPasos(x){
+    if(!x) return;
+    if(typeof x === 'string'){
+      x.split(/\n+/).map(limpiarTexto).filter(Boolean).forEach(p => steps.push(p));
+      return;
+    }
+    if(Array.isArray(x)){ x.forEach(sacarPasos); return; }
+    if(typeof x === 'object'){
+      if(x.itemListElement){ sacarPasos(x.itemListElement); return; }
+      if(x.text){ steps.push(limpiarTexto(x.text)); return; }
+      if(x.name){ steps.push(limpiarTexto(x.name)); }
+    }
+  })(d.recipeInstructions);
+
+  // Imagen
+  let img = d.image;
+  if(Array.isArray(img)) img = img[0];
+  if(img && typeof img === 'object') img = img.url || img.contentUrl || null;
+  if(img && typeof img !== 'string') img = null;
+
+  // Tiempos
+  let prepMinutes = isoAMinutos(d.prepTime);
+  let cookMinutes = isoAMinutos(d.cookTime);
+  if(prepMinutes === 0 && cookMinutes === 0){
+    cookMinutes = isoAMinutos(d.totalTime);
+  }
+
+  // Raciones
+  let yieldBruto = d.recipeYield;
+  if(Array.isArray(yieldBruto)) yieldBruto = yieldBruto[0];
+  const servings = parseInt(String(yieldBruto ?? '').replace(/\D+/g, '')) || 4;
+
+  // Etiquetas
+  let tags = [];
+  if(d.keywords){
+    tags = Array.isArray(d.keywords)
+      ? d.keywords.map(limpiarTexto)
+      : String(d.keywords).split(',').map(s => limpiarTexto(s));
+  }
+  tags = tags.filter(t => t && t.length <= 30).slice(0, 8);
+
+  const title = limpiarTexto(d.name);
+  return {
+    title,
+    description: limpiarTexto(d.description),
+    category: adivinarCategoria(d, title.toLowerCase()),
+    difficulty: 'Media',
+    prepMinutes,
+    cookMinutes,
+    servings,
+    ingredients,
+    steps,
+    imageUrl: img || null,
+    tags
+  };
+}
+
+function abrirFormCon(r){
+  abrirForm();
+  document.getElementById('rTitle').value = r.title;
+  document.getElementById('rDescription').value = r.description;
+  document.getElementById('rCategory').value = r.category;
+  document.getElementById('rDifficulty').value = r.difficulty;
+  document.getElementById('rPrep').value = r.prepMinutes;
+  document.getElementById('rCook').value = r.cookMinutes;
+  document.getElementById('rServings').value = r.servings;
+  document.getElementById('rImageUrl').value = r.imageUrl || '';
+  document.getElementById('rIngredients').value = r.ingredients.join('\n');
+  document.getElementById('rSteps').value = r.steps.join('\n');
+  document.getElementById('rTags').value = r.tags.join(', ');
+}
+
+/* ───── Cierre con Escape y clic fuera ───── */
+document.addEventListener('keydown', e => {
+  const cocinaAbierta = document.getElementById('ovCocina').classList.contains('open');
+  if(e.key === 'Escape'){
+    if(cocinaAbierta){ cerrarCocina(); return; }
+    cerrarForm(); cerrarDetalle(); cerrarImportUrl(); cerrarLogin(); cerrarImportTexto(); cerrarListaCompra(); cerrarNube();
+    return;
+  }
+  if(cocinaAbierta){
+    if(e.key === 'ArrowRight') pasoCocina(1);
+    if(e.key === 'ArrowLeft') pasoCocina(-1);
+  }
+});
+['ovForm','ovDetalle','ovImport','ovLogin','ovTexto','ovCompra','ovNube'].forEach(id => {
+  document.getElementById(id).addEventListener('click', e => {
+    if(e.target.id === id){ cerrarForm(); cerrarDetalle(); cerrarImportUrl(); cerrarLogin(); cerrarImportTexto(); cerrarListaCompra(); cerrarNube(); }
+  });
+});
+
+/* ───── Lista de la compra ───── */
+let compraSeleccionadas = {};
+
+function abrirListaCompra(){
+  if(recetas.length === 0){ toast('Aún no tienes recetas', 'warn'); return; }
+  compraSeleccionadas = {};
+  document.getElementById('compraPaso1').style.display = 'block';
+  document.getElementById('compraPaso2').style.display = 'none';
+  document.getElementById('compraEstado').textContent = '';
+  document.getElementById('compraBoton').disabled = false;
+
+  const cont = document.getElementById('compraSeleccion');
+  cont.innerHTML = recetas.slice().sort((a,b) => (b.updatedAt||'').localeCompare(a.updatedAt||''))
+    .map(r => `
+    <label style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:11px 14px;cursor:pointer">
+      <input type="checkbox" value="${r.id}" onchange="toggleCompra('${r.id}')" style="width:18px;height:18px;flex-shrink:0">
+      <span style="flex:1;font-weight:700">${esc(r.title)}</span>
+      <span style="display:flex;align-items:center;gap:6px" onclick="event.preventDefault()">
+        <button class="serv-btn" onclick="ajustarRacionCompra('${r.id}',-1,event)" style="width:26px;height:26px;font-size:15px">−</button>
+        <span id="racComp-${r.id}" style="font-weight:800;min-width:44px;text-align:center">${r.servings} rac.</span>
+        <button class="serv-btn" onclick="ajustarRacionCompra('${r.id}',1,event)" style="width:26px;height:26px;font-size:15px">+</button>
+      </span>
+    </label>
+  `).join('');
+}
+function cerrarListaCompra(){
+  document.getElementById('ovCompra').classList.remove('open');
+}
+function toggleCompra(id){
+  if(compraSeleccionadas[id]){
+    delete compraSeleccionadas[id];
+  }else{
+    const r = recetas.find(x => x.id === id);
+    compraSeleccionadas[id] = r ? r.servings : 4;
+  }
+}
+function ajustarRacionCompra(id, delta, ev){
+  ev.preventDefault();
+  const r = recetas.find(x => x.id === id);
+  if(!r) return;
+  let actual = compraSeleccionadas[id] || r.servings;
+  actual = Math.max(1, actual + delta);
+  compraSeleccionadas[id] = actual;
+  // marcar el checkbox si no lo estaba
+  const chk = document.querySelector('#compraSeleccion input[value="' + id + '"]');
+  if(chk && !chk.checked) chk.checked = true;
+  document.getElementById('racComp-' + id).textContent = actual + ' rac.';
+}
+
+async function generarListaCompra(){
+  const ids = Object.keys(compraSeleccionadas);
+  if(ids.length === 0){ toast('Selecciona al menos una receta', 'warn'); return; }
+
+  const boton = document.getElementById('compraBoton');
+  const estado = document.getElementById('compraEstado');
+  boton.disabled = true;
+  estado.textContent = 'La IA está preparando la lista…';
+
+  // Reunir todos los ingredientes escalados
+  const lineas = [];
+  ids.forEach(id => {
+    const r = recetas.find(x => x.id === id);
+    if(!r) return;
+    const factor = (compraSeleccionadas[id] || r.servings) / (r.servings || 1);
+    (r.ingredients || []).forEach(ing => {
+      lineas.push(escalarIngrediente(ing, factor));
+    });
+  });
+
+  try{
+    const lista = await agruparIngredientesIA(lineas);
+    mostrarResultadoCompra(lista);
+  }catch(e){
+    // Si la IA falla, mostrar lista simple sin agrupar
+    estado.textContent = '';
+    mostrarResultadoCompra(agruparSimple(lineas));
+    toast('Lista generada (sin agrupar por IA)', 'warn');
+  }finally{
+    boton.disabled = false;
+  }
+}
+
+async function agruparIngredientesIA(lineas){
+  const prompt = 'Eres un asistente de cocina. Te doy una lista de ingredientes de varias recetas. Agrúpalos sumando las cantidades del mismo ingrediente (ej. "200 g harina" + "300 g harina" = "500 g de harina"). Devuelve SOLO un JSON con esta forma: {"lista":[{"categoria":"Verduras","items":["500 g de harina","3 huevos"]}]}. Agrupa por categorías de supermercado (Verduras y frutas, Carnes, Pescados, Lácteos y huevos, Despensa, Especias, Otros). Responde solo el JSON.\n\nIngredientes:\n' + lineas.join('\n');
+
+  const res = await fetch(WORKER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ texto: prompt, modo: 'compra' })
+  });
+  if(!res.ok) throw new Error('IA no disponible');
+  const data = await res.json();
+  // El worker devuelve la receta normalizada; para compra puede venir distinto.
+  // Intentamos leer data.lista, o si viene como texto en algún campo.
+  if(data.lista) return data.lista;
+  if(data.steps || data.ingredients){
+    // El worker lo trató como receta; reconstruir desde ingredients
+    throw new Error('formato receta');
+  }
+  throw new Error('sin lista');
+}
+
+function agruparSimple(lineas){
+  // Fusión básica de líneas idénticas
+  const cuenta = {};
+  lineas.forEach(l => { cuenta[l] = (cuenta[l] || 0) + 1; });
+  const items = Object.keys(cuenta).map(l => cuenta[l] > 1 ? (cuenta[l] + '× ' + l) : l);
+  return [{ categoria: 'Todos los ingredientes', items }];
+}
+
+let listaCompraActual = [];
+function mostrarResultadoCompra(lista){
+  listaCompraActual = lista;
+  document.getElementById('compraPaso1').style.display = 'none';
+  document.getElementById('compraPaso2').style.display = 'block';
+  const cont = document.getElementById('compraResultado');
+  cont.innerHTML = lista.map(grupo => `
+    <h3 class="section-title">${esc(grupo.categoria)}</h3>
+    <ul class="ing">
+      ${(grupo.items||[]).map((it, i) => `
+        <li style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="this.classList.toggle('tachado')">
+          <input type="checkbox" style="width:17px;height:17px" onclick="event.stopPropagation();this.closest('li').classList.toggle('tachado')">
+          <span>${esc(it)}</span>
+        </li>
+      `).join('')}
+    </ul>
+  `).join('');
+}
+function volverSeleccionCompra(){
+  document.getElementById('compraPaso1').style.display = 'block';
+  document.getElementById('compraPaso2').style.display = 'none';
+}
+
+function compartirListaWhatsApp(){
+  let texto = '🛒 *LISTA DE LA COMPRA*\n';
+  listaCompraActual.forEach(grupo => {
+    texto += '\n*' + grupo.categoria.toUpperCase() + '*\n';
+    (grupo.items||[]).forEach(it => { texto += '• ' + it + '\n'; });
+  });
+  texto += '\n_Generada con Mi Recetario_';
+  window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank');
+}
+
+/* ───── Nube: recetas publicadas ───── */
+function abrirNube(){
+  document.getElementById('nubeEstado').textContent = '';
+  document.getElementById('nubeLista').innerHTML = '';
+  document.getElementById('ovNube').classList.add('open');
+}
+function cerrarNube(){
+  document.getElementById('ovNube').classList.remove('open');
+}
+
+async function cargarPublicadas(){
+  if(!db){ toast('Firebase no disponible', 'warn'); return; }
+  const estado = document.getElementById('nubeEstado');
+  const cont = document.getElementById('nubeLista');
+  estado.textContent = 'Cargando recetas publicadas…';
+  cont.innerHTML = '';
+  try{
+    const snap = await db.collection('recipes').orderBy('createdAt', 'desc').limit(100).get();
+    if(snap.empty){ estado.textContent = 'No hay recetas publicadas.'; return; }
+    estado.textContent = snap.size + ' recetas publicadas en Hablemos de Cocina';
+    const puedeEditar = usuarioActual && usuarioActual.uid === ADMIN_UID;
+    cont.innerHTML = snap.docs.map(doc => {
+      const r = doc.data();
+      return `
+        <div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 15px;display:flex;align-items:center;gap:12px">
+          <div style="flex:1">
+            <div style="font-weight:800;font-size:15.5px">${esc(r.title || 'Sin título')}</div>
+            <div style="color:var(--muted);font-size:13px;font-weight:600">${esc(r.category || '')} · ${esc(r.difficulty || '')}</div>
+          </div>
+          <button class="btn btn-line" style="padding:7px 12px" onclick="importarPublicadaALocal('${doc.id}')">✎ Editar aquí</button>
+          ${puedeEditar ? `<button class="btn btn-danger" style="padding:7px 12px" onclick="retirarPublicada('${doc.id}','${esc((r.title||'').replace(/'/g,''))}')">Retirar</button>` : ''}
+        </div>
+      `;
+    }).join('');
+  }catch(e){
+    console.error(e);
+    estado.textContent = 'Error al cargar: ' + (e.message || '');
+  }
+}
+
+async function importarPublicadaALocal(docId){
+  try{
+    const doc = await db.collection('recipes').doc(docId).get();
+    if(!doc.exists){ toast('Esa receta ya no existe', 'warn'); return; }
+    const r = doc.data();
+    const ahora = new Date().toISOString();
+    const nueva = {
+      id: uid(),
+      title: r.title || 'Sin título',
+      description: r.description || '',
+      category: CATEGORIAS.includes(r.category) ? r.category : 'Otros',
+      difficulty: DIFICULTADES.includes(r.difficulty) ? r.difficulty : 'Media',
+      prepMinutes: parseInt(r.prepMinutes) || 0,
+      cookMinutes: parseInt(r.cookMinutes) || 0,
+      servings: parseInt(r.servings) || 4,
+      ingredients: Array.isArray(r.ingredients) ? r.ingredients.map(String) : [],
+      steps: Array.isArray(r.steps) ? r.steps.map(String) : [],
+      imageUrl: r.imageUrl || null,
+      tags: Array.isArray(r.tags) ? r.tags.map(String) : [],
+      createdAt: ahora,
+      updatedAt: ahora,
+      publishedToHdC: true,
+      hdcDocId: docId
+    };
+    recetas.push(nueva);
+    guardar();
+    render();
+    cerrarNube();
+    toast('Receta traída a tu recetario para editar');
+    abrirDetalle(nueva.id);
+  }catch(e){
+    toast('Error: ' + (e.message || ''), 'warn');
+  }
+}
+
+async function retirarPublicada(docId, titulo){
+  if(!usuarioActual || usuarioActual.uid !== ADMIN_UID){
+    toast('Inicia sesión de administrador', 'warn'); return;
+  }
+  if(!confirm('¿Retirar "' + titulo + '" de Hablemos de Cocina? Desaparecerá de la app pública. Esta acción no se puede deshacer.')) return;
+  try{
+    await db.collection('recipes').doc(docId).delete();
+    // Actualizar estado local si la teníamos
+    const local = recetas.find(x => x.hdcDocId === docId);
+    if(local){ local.publishedToHdC = false; local.hdcDocId = null; guardar(); render(); }
+    toast('Receta retirada de la app');
+    cargarPublicadas();
+  }catch(e){
+    toast('Error al retirar: ' + (e.message || ''), 'warn');
+  }
+}
+
+/* ───── PWA: registrar service worker (archivo real, mismo origen) ───── */
+/* Service worker no necesario dentro de la APK */
+
+/* ───── Inicio ───── */
+llenarSelects();
+cargar();
+render();
+actualizarEstadoSesion();
+</script>
+</body>
+</html>
