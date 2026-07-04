@@ -35,18 +35,15 @@ jobs:
           npx cap add android
           npx cap sync android
 
+      - name: Aplicar icono personalizado
+        run: |
+          cp -r android-icons/res/* android/app/src/main/res/
+          echo "Iconos copiados:"
+          find android/app/src/main/res -name "ic_launcher*" | sort
+
       - name: Preparar keystore
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > $GITHUB_WORKSPACE/android/app/recetario.keystore
-
-      - name: Mostrar huella SHA-1 del keystore
-        run: |
-          echo "================ HUELLAS DEL KEYSTORE ================"
-          keytool -list -v \
-            -keystore $GITHUB_WORKSPACE/android/app/recetario.keystore \
-            -storepass "${{ secrets.KEYSTORE_PASSWORD }}" \
-            | grep -E "SHA1:|SHA256:|Alias" || true
-          echo "====================================================="
 
       - name: Compilar y firmar APK
         working-directory: android
