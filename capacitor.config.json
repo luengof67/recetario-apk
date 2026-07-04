@@ -1,0 +1,8 @@
+{
+  "appId": "com.joseluengo.recetario",
+  "appName": "Mi Recetario",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}
