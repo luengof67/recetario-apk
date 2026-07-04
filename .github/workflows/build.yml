@@ -1,0 +1,64 @@
+name: Compilar APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Configurar Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Instalar dependencias
+        run: npm install --legacy-peer-deps
+
+      - name: Añadir plataforma Android
+        run: |
+          npx cap add android
+          npx cap sync android
+
+      - name: Preparar keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > $GITHUB_WORKSPACE/android/app/recetario.keystore
+
+      - name: Mostrar huella SHA-1 del keystore
+        run: |
+          echo "================ HUELLAS DEL KEYSTORE ================"
+          keytool -list -v \
+            -keystore $GITHUB_WORKSPACE/android/app/recetario.keystore \
+            -storepass "${{ secrets.KEYSTORE_PASSWORD }}" \
+            | grep -E "SHA1:|SHA256:|Alias" || true
+          echo "====================================================="
+
+      - name: Compilar y firmar APK
+        working-directory: android
+        run: |
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file=$GITHUB_WORKSPACE/android/app/recetario.keystore \
+            -Pandroid.injected.signing.store.password="${{ secrets.KEYSTORE_PASSWORD }}" \
+            -Pandroid.injected.signing.key.alias="${{ secrets.KEY_ALIAS }}" \
+            -Pandroid.injected.signing.key.password="${{ secrets.KEY_PASSWORD }}"
+
+      - name: Subir APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: recetario-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
