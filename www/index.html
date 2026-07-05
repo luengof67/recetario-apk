@@ -271,6 +271,7 @@
     background:#fff;border:1px solid var(--line);border-radius:9px;
     padding:9px 14px;font-size:15px;
   }
+  ul.ing li.tachado{opacity:.5;text-decoration:line-through}
   ol.steps{list-style:none;counter-reset:paso;display:flex;flex-direction:column;gap:11px}
   ol.steps li{
     counter-increment:paso;
@@ -379,6 +380,8 @@
   <button class="btn btn-ghost" onclick="document.getElementById('importFile').click()">⬆ Importar copia</button>
   <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importarCopia(event)">
   <button class="btn btn-accent" onclick="abrirForm()">+ Nueva receta</button>
+  <button class="btn btn-gold" onclick="abrirListaCompra()">🛒 Lista de compra</button>
+  <button class="btn btn-gold" onclick="abrirNube()">☁ Nube</button>
   <span id="sesionEstado" class="sesion-estado" onclick="gestionarSesion()" title="Sesión de administrador"></span>
 </header>
 
@@ -394,6 +397,55 @@
 </div>
 
 <main class="grid" id="grid"></main>
+
+<!-- Modal lista de la compra -->
+<div class="overlay" id="ovCompra">
+  <div class="modal" style="width:min(680px,100%)">
+    <div class="modal-head">
+      <h2>🛒 Lista de la compra</h2>
+      <button class="close-x" onclick="cerrarListaCompra()" aria-label="Cerrar">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="compraPaso1">
+        <p style="margin-bottom:14px;color:var(--muted);font-weight:600;font-size:14.5px">
+          Elige las recetas y ajusta las raciones. La IA juntará y sumará los ingredientes en una sola lista.
+        </p>
+        <div id="compraSeleccion" style="max-height:340px;overflow-y:auto;display:flex;flex-direction:column;gap:8px"></div>
+        <p id="compraEstado" style="margin-top:12px;font-weight:700;color:var(--muted);font-size:14px;min-height:20px"></p>
+        <div class="form-actions">
+          <button class="btn btn-line" onclick="cerrarListaCompra()">Cancelar</button>
+          <button class="btn btn-accent" id="compraBoton" onclick="generarListaCompra()">Generar lista con IA</button>
+        </div>
+      </div>
+      <div id="compraPaso2" style="display:none">
+        <div id="compraResultado"></div>
+        <div class="form-actions">
+          <button class="btn btn-line" onclick="volverSeleccionCompra()">← Volver</button>
+          <button class="btn btn-wa" onclick="compartirListaWhatsApp()">📱 WhatsApp</button>
+          <button class="btn btn-accent" onclick="cerrarListaCompra()">Hecho</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal nube (recetas publicadas + restaurar) -->
+<div class="overlay" id="ovNube">
+  <div class="modal" style="width:min(760px,100%)">
+    <div class="modal-head">
+      <h2>☁ Recetas en la nube</h2>
+      <button class="close-x" onclick="cerrarNube()" aria-label="Cerrar">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+        <button class="btn btn-line" onclick="cargarPublicadas()">🔄 Ver publicadas en la app</button>
+        <button class="btn btn-line" onclick="restaurarDesdeNube()">⬇ Restaurar mis borradores</button>
+      </div>
+      <p id="nubeEstado" style="font-weight:700;color:var(--muted);font-size:14px;min-height:20px"></p>
+      <div id="nubeLista" style="display:flex;flex-direction:column;gap:10px"></div>
+    </div>
+  </div>
+</div>
 
 <!-- Modal login admin -->
 <div class="overlay" id="ovLogin">
@@ -599,6 +651,60 @@ function cargar(){
 }
 function guardar(){
   localStorage.setItem(STORAGE_KEY, JSON.stringify(recetas));
+  copiaSeguridadAuto();
+}
+
+/* ───── Copia de seguridad automática (silenciosa) ───── */
+let backupTimer = null;
+function copiaSeguridadAuto(){
+  // Solo si hay sesión admin y Firebase disponible
+  if(!db || !usuarioActual || usuarioActual.uid !== ADMIN_UID) return;
+  // Agrupar cambios: espera 3s tras el último guardado para no escribir de más
+  clearTimeout(backupTimer);
+  backupTimer = setTimeout(async () => {
+    try{
+      await db.collection('recetario_backup').doc(ADMIN_UID).set({
+        recetas: recetas,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        total: recetas.length
+      });
+    }catch(e){
+      console.warn('Copia de seguridad no realizada', e);
+    }
+  }, 3000);
+}
+
+async function restaurarDesdeNube(){
+  if(!db){ toast('Firebase no disponible', 'warn'); return; }
+  if(!usuarioActual || usuarioActual.uid !== ADMIN_UID){
+    toast('Inicia sesión de administrador para restaurar', 'warn');
+    abrirLogin();
+    return;
+  }
+  try{
+    const doc = await db.collection('recetario_backup').doc(ADMIN_UID).get();
+    if(!doc.exists){ toast('No hay copia de seguridad en la nube', 'warn'); return; }
+    const datos = doc.data();
+    const copiaRecetas = Array.isArray(datos.recetas) ? datos.recetas : [];
+    if(copiaRecetas.length === 0){ toast('La copia está vacía', 'warn'); return; }
+    if(!confirm('Restaurar ' + copiaRecetas.length + ' recetas de la nube. Esto añadirá las que falten sin borrar las tuyas actuales. ¿Continuar?')) return;
+
+    // Fusionar: añade las que no existan (por id)
+    const idsActuales = new Set(recetas.map(r => r.id));
+    let añadidas = 0;
+    copiaRecetas.forEach(r => {
+      if(r && r.id && !idsActuales.has(r.id)){
+        recetas.push(r);
+        añadidas++;
+      }
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(recetas));
+    render();
+    toast(añadidas + (añadidas === 1 ? ' receta restaurada' : ' recetas restauradas'));
+  }catch(e){
+    console.error(e);
+    toast('Error al restaurar: ' + (e.message || ''), 'warn');
+  }
 }
 
 /* ───── Utilidades ───── */
@@ -959,10 +1065,15 @@ async function hacerLogin(){
 // Escuchar cambios de sesión (persiste entre recargas)
 if(auth){
   auth.onAuthStateChanged(user => {
+    const antesNoHabia = !usuarioActual;
     usuarioActual = user;
     actualizarEstadoSesion();
     if(document.getElementById('ovDetalle').classList.contains('open')){
       renderDetalle();
+    }
+    // Al iniciar sesión, hacer copia de lo que haya en local
+    if(user && user.uid === ADMIN_UID && antesNoHabia){
+      copiaSeguridadAuto();
     }
   });
 }
@@ -1634,7 +1745,7 @@ document.addEventListener('keydown', e => {
   const cocinaAbierta = document.getElementById('ovCocina').classList.contains('open');
   if(e.key === 'Escape'){
     if(cocinaAbierta){ cerrarCocina(); return; }
-    cerrarForm(); cerrarDetalle(); cerrarImportUrl(); cerrarLogin(); cerrarImportTexto();
+    cerrarForm(); cerrarDetalle(); cerrarImportUrl(); cerrarLogin(); cerrarImportTexto(); cerrarListaCompra(); cerrarNube();
     return;
   }
   if(cocinaAbierta){
@@ -1642,11 +1753,246 @@ document.addEventListener('keydown', e => {
     if(e.key === 'ArrowLeft') pasoCocina(-1);
   }
 });
-['ovForm','ovDetalle','ovImport','ovLogin','ovTexto'].forEach(id => {
+['ovForm','ovDetalle','ovImport','ovLogin','ovTexto','ovCompra','ovNube'].forEach(id => {
   document.getElementById(id).addEventListener('click', e => {
-    if(e.target.id === id){ cerrarForm(); cerrarDetalle(); cerrarImportUrl(); cerrarLogin(); cerrarImportTexto(); }
+    if(e.target.id === id){ cerrarForm(); cerrarDetalle(); cerrarImportUrl(); cerrarLogin(); cerrarImportTexto(); cerrarListaCompra(); cerrarNube(); }
   });
 });
+
+/* ───── Lista de la compra ───── */
+let compraSeleccionadas = {};
+
+function abrirListaCompra(){
+  if(recetas.length === 0){ toast('Aún no tienes recetas', 'warn'); return; }
+  compraSeleccionadas = {};
+  document.getElementById('compraPaso1').style.display = 'block';
+  document.getElementById('compraPaso2').style.display = 'none';
+  document.getElementById('compraEstado').textContent = '';
+  document.getElementById('compraBoton').disabled = false;
+
+  const cont = document.getElementById('compraSeleccion');
+  cont.innerHTML = recetas.slice().sort((a,b) => (b.updatedAt||'').localeCompare(a.updatedAt||''))
+    .map(r => `
+    <label style="display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:11px 14px;cursor:pointer">
+      <input type="checkbox" value="${r.id}" onchange="toggleCompra('${r.id}')" style="width:18px;height:18px;flex-shrink:0">
+      <span style="flex:1;font-weight:700">${esc(r.title)}</span>
+      <span style="display:flex;align-items:center;gap:6px" onclick="event.preventDefault()">
+        <button class="serv-btn" onclick="ajustarRacionCompra('${r.id}',-1,event)" style="width:26px;height:26px;font-size:15px">−</button>
+        <span id="racComp-${r.id}" style="font-weight:800;min-width:44px;text-align:center">${r.servings} rac.</span>
+        <button class="serv-btn" onclick="ajustarRacionCompra('${r.id}',1,event)" style="width:26px;height:26px;font-size:15px">+</button>
+      </span>
+    </label>
+  `).join('');
+}
+function cerrarListaCompra(){
+  document.getElementById('ovCompra').classList.remove('open');
+}
+function toggleCompra(id){
+  if(compraSeleccionadas[id]){
+    delete compraSeleccionadas[id];
+  }else{
+    const r = recetas.find(x => x.id === id);
+    compraSeleccionadas[id] = r ? r.servings : 4;
+  }
+}
+function ajustarRacionCompra(id, delta, ev){
+  ev.preventDefault();
+  const r = recetas.find(x => x.id === id);
+  if(!r) return;
+  let actual = compraSeleccionadas[id] || r.servings;
+  actual = Math.max(1, actual + delta);
+  compraSeleccionadas[id] = actual;
+  // marcar el checkbox si no lo estaba
+  const chk = document.querySelector('#compraSeleccion input[value="' + id + '"]');
+  if(chk && !chk.checked) chk.checked = true;
+  document.getElementById('racComp-' + id).textContent = actual + ' rac.';
+}
+
+async function generarListaCompra(){
+  const ids = Object.keys(compraSeleccionadas);
+  if(ids.length === 0){ toast('Selecciona al menos una receta', 'warn'); return; }
+
+  const boton = document.getElementById('compraBoton');
+  const estado = document.getElementById('compraEstado');
+  boton.disabled = true;
+  estado.textContent = 'La IA está preparando la lista…';
+
+  // Reunir todos los ingredientes escalados
+  const lineas = [];
+  ids.forEach(id => {
+    const r = recetas.find(x => x.id === id);
+    if(!r) return;
+    const factor = (compraSeleccionadas[id] || r.servings) / (r.servings || 1);
+    (r.ingredients || []).forEach(ing => {
+      lineas.push(escalarIngrediente(ing, factor));
+    });
+  });
+
+  try{
+    const lista = await agruparIngredientesIA(lineas);
+    mostrarResultadoCompra(lista);
+  }catch(e){
+    // Si la IA falla, mostrar lista simple sin agrupar
+    estado.textContent = '';
+    mostrarResultadoCompra(agruparSimple(lineas));
+    toast('Lista generada (sin agrupar por IA)', 'warn');
+  }finally{
+    boton.disabled = false;
+  }
+}
+
+async function agruparIngredientesIA(lineas){
+  const prompt = 'Eres un asistente de cocina. Te doy una lista de ingredientes de varias recetas. Agrúpalos sumando las cantidades del mismo ingrediente (ej. "200 g harina" + "300 g harina" = "500 g de harina"). Devuelve SOLO un JSON con esta forma: {"lista":[{"categoria":"Verduras","items":["500 g de harina","3 huevos"]}]}. Agrupa por categorías de supermercado (Verduras y frutas, Carnes, Pescados, Lácteos y huevos, Despensa, Especias, Otros). Responde solo el JSON.\n\nIngredientes:\n' + lineas.join('\n');
+
+  const res = await fetch(WORKER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ texto: prompt, modo: 'compra' })
+  });
+  if(!res.ok) throw new Error('IA no disponible');
+  const data = await res.json();
+  // El worker devuelve la receta normalizada; para compra puede venir distinto.
+  // Intentamos leer data.lista, o si viene como texto en algún campo.
+  if(data.lista) return data.lista;
+  if(data.steps || data.ingredients){
+    // El worker lo trató como receta; reconstruir desde ingredients
+    throw new Error('formato receta');
+  }
+  throw new Error('sin lista');
+}
+
+function agruparSimple(lineas){
+  // Fusión básica de líneas idénticas
+  const cuenta = {};
+  lineas.forEach(l => { cuenta[l] = (cuenta[l] || 0) + 1; });
+  const items = Object.keys(cuenta).map(l => cuenta[l] > 1 ? (cuenta[l] + '× ' + l) : l);
+  return [{ categoria: 'Todos los ingredientes', items }];
+}
+
+let listaCompraActual = [];
+function mostrarResultadoCompra(lista){
+  listaCompraActual = lista;
+  document.getElementById('compraPaso1').style.display = 'none';
+  document.getElementById('compraPaso2').style.display = 'block';
+  const cont = document.getElementById('compraResultado');
+  cont.innerHTML = lista.map(grupo => `
+    <h3 class="section-title">${esc(grupo.categoria)}</h3>
+    <ul class="ing">
+      ${(grupo.items||[]).map((it, i) => `
+        <li style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="this.classList.toggle('tachado')">
+          <input type="checkbox" style="width:17px;height:17px" onclick="event.stopPropagation();this.closest('li').classList.toggle('tachado')">
+          <span>${esc(it)}</span>
+        </li>
+      `).join('')}
+    </ul>
+  `).join('');
+}
+function volverSeleccionCompra(){
+  document.getElementById('compraPaso1').style.display = 'block';
+  document.getElementById('compraPaso2').style.display = 'none';
+}
+
+function compartirListaWhatsApp(){
+  let texto = '🛒 *LISTA DE LA COMPRA*\n';
+  listaCompraActual.forEach(grupo => {
+    texto += '\n*' + grupo.categoria.toUpperCase() + '*\n';
+    (grupo.items||[]).forEach(it => { texto += '• ' + it + '\n'; });
+  });
+  texto += '\n_Generada con Mi Recetario_';
+  window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank');
+}
+
+/* ───── Nube: recetas publicadas ───── */
+function abrirNube(){
+  document.getElementById('nubeEstado').textContent = '';
+  document.getElementById('nubeLista').innerHTML = '';
+  document.getElementById('ovNube').classList.add('open');
+}
+function cerrarNube(){
+  document.getElementById('ovNube').classList.remove('open');
+}
+
+async function cargarPublicadas(){
+  if(!db){ toast('Firebase no disponible', 'warn'); return; }
+  const estado = document.getElementById('nubeEstado');
+  const cont = document.getElementById('nubeLista');
+  estado.textContent = 'Cargando recetas publicadas…';
+  cont.innerHTML = '';
+  try{
+    const snap = await db.collection('recipes').orderBy('createdAt', 'desc').limit(100).get();
+    if(snap.empty){ estado.textContent = 'No hay recetas publicadas.'; return; }
+    estado.textContent = snap.size + ' recetas publicadas en Hablemos de Cocina';
+    const puedeEditar = usuarioActual && usuarioActual.uid === ADMIN_UID;
+    cont.innerHTML = snap.docs.map(doc => {
+      const r = doc.data();
+      return `
+        <div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 15px;display:flex;align-items:center;gap:12px">
+          <div style="flex:1">
+            <div style="font-weight:800;font-size:15.5px">${esc(r.title || 'Sin título')}</div>
+            <div style="color:var(--muted);font-size:13px;font-weight:600">${esc(r.category || '')} · ${esc(r.difficulty || '')}</div>
+          </div>
+          <button class="btn btn-line" style="padding:7px 12px" onclick="importarPublicadaALocal('${doc.id}')">✎ Editar aquí</button>
+          ${puedeEditar ? `<button class="btn btn-danger" style="padding:7px 12px" onclick="retirarPublicada('${doc.id}','${esc((r.title||'').replace(/'/g,''))}')">Retirar</button>` : ''}
+        </div>
+      `;
+    }).join('');
+  }catch(e){
+    console.error(e);
+    estado.textContent = 'Error al cargar: ' + (e.message || '');
+  }
+}
+
+async function importarPublicadaALocal(docId){
+  try{
+    const doc = await db.collection('recipes').doc(docId).get();
+    if(!doc.exists){ toast('Esa receta ya no existe', 'warn'); return; }
+    const r = doc.data();
+    const ahora = new Date().toISOString();
+    const nueva = {
+      id: uid(),
+      title: r.title || 'Sin título',
+      description: r.description || '',
+      category: CATEGORIAS.includes(r.category) ? r.category : 'Otros',
+      difficulty: DIFICULTADES.includes(r.difficulty) ? r.difficulty : 'Media',
+      prepMinutes: parseInt(r.prepMinutes) || 0,
+      cookMinutes: parseInt(r.cookMinutes) || 0,
+      servings: parseInt(r.servings) || 4,
+      ingredients: Array.isArray(r.ingredients) ? r.ingredients.map(String) : [],
+      steps: Array.isArray(r.steps) ? r.steps.map(String) : [],
+      imageUrl: r.imageUrl || null,
+      tags: Array.isArray(r.tags) ? r.tags.map(String) : [],
+      createdAt: ahora,
+      updatedAt: ahora,
+      publishedToHdC: true,
+      hdcDocId: docId
+    };
+    recetas.push(nueva);
+    guardar();
+    render();
+    cerrarNube();
+    toast('Receta traída a tu recetario para editar');
+    abrirDetalle(nueva.id);
+  }catch(e){
+    toast('Error: ' + (e.message || ''), 'warn');
+  }
+}
+
+async function retirarPublicada(docId, titulo){
+  if(!usuarioActual || usuarioActual.uid !== ADMIN_UID){
+    toast('Inicia sesión de administrador', 'warn'); return;
+  }
+  if(!confirm('¿Retirar "' + titulo + '" de Hablemos de Cocina? Desaparecerá de la app pública. Esta acción no se puede deshacer.')) return;
+  try{
+    await db.collection('recipes').doc(docId).delete();
+    // Actualizar estado local si la teníamos
+    const local = recetas.find(x => x.hdcDocId === docId);
+    if(local){ local.publishedToHdC = false; local.hdcDocId = null; guardar(); render(); }
+    toast('Receta retirada de la app');
+    cargarPublicadas();
+  }catch(e){
+    toast('Error al retirar: ' + (e.message || ''), 'warn');
+  }
+}
 
 /* ───── PWA: registrar service worker (archivo real, mismo origen) ───── */
 /* Service worker no necesario dentro de la APK */
