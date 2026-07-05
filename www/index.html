@@ -80,6 +80,22 @@
   .sesion-estado:hover{border-color:var(--secondary)}
   .sesion-estado.on{border-color:var(--ok);color:#8FD9A4}
   .sesion-estado.off{border-color:rgba(232,98,58,.5);color:#F0A58E}
+  .ia-tabs{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+  .ia-tab{
+    flex:1;min-width:130px;border:1.5px solid var(--line);background:#fff;
+    border-radius:10px;padding:10px 12px;font-family:'Nunito',sans-serif;
+    font-size:13.5px;font-weight:800;color:var(--muted);cursor:pointer;
+    transition:all .15s ease;
+  }
+  .ia-tab:hover{border-color:var(--secondary)}
+  .ia-tab.activa{background:var(--primary);color:#FAF7F2;border-color:var(--primary)}
+  .idea-card{
+    background:#fff;border:1px solid var(--line);border-radius:10px;
+    padding:12px 15px;margin-bottom:9px;cursor:pointer;transition:all .15s ease;
+  }
+  .idea-card:hover{border-color:var(--secondary);transform:translateY(-1px)}
+  .idea-card .it{font-weight:800;font-size:15.5px;color:var(--primary)}
+  .idea-card .id{color:var(--muted);font-size:13.5px;font-weight:600;margin-top:2px}
   .btn-line{background:#fff;color:var(--primary);border:1.5px solid var(--line)}
   .btn-line:hover{border-color:var(--secondary)}
   .btn-danger{background:#fff;color:#B3402A;border:1.5px solid #E8C4BA}
@@ -380,6 +396,7 @@
   <button class="btn btn-ghost" onclick="document.getElementById('importFile').click()">⬆ Importar copia</button>
   <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="importarCopia(event)">
   <button class="btn btn-accent" onclick="abrirForm()">+ Nueva receta</button>
+  <button class="btn btn-accent" onclick="abrirCrearIA()">✨ Crear con IA</button>
   <button class="btn btn-gold" onclick="abrirListaCompra()">🛒 Lista de compra</button>
   <button class="btn btn-gold" onclick="abrirNube()">☁ Nube</button>
   <span id="sesionEstado" class="sesion-estado" onclick="gestionarSesion()" title="Sesión de administrador"></span>
@@ -397,6 +414,52 @@
 </div>
 
 <main class="grid" id="grid"></main>
+
+<!-- Modal crear con IA -->
+<div class="overlay" id="ovCrearIA">
+  <div class="modal" style="width:min(600px,100%)">
+    <div class="modal-head">
+      <h2>✨ Crear con IA</h2>
+      <button class="close-x" onclick="cerrarCrearIA()" aria-label="Cerrar">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="ia-tabs">
+        <button class="ia-tab activa" data-modo="idea" onclick="cambiarTabIA('idea')">💡 Desde una idea</button>
+        <button class="ia-tab" data-modo="tengo" onclick="cambiarTabIA('tengo')">🧺 Con lo que tengo</button>
+        <button class="ia-tab" data-modo="mias" onclick="cambiarTabIA('mias')">📖 De mi recetario</button>
+      </div>
+
+      <div id="iaPanel-idea" class="ia-panel">
+        <label style="display:flex;flex-direction:column;gap:6px;font-size:13.5px;font-weight:800;color:var(--primary)">¿Qué plato quieres crear?
+          <input type="text" id="iaIdea" placeholder="Ej. Tapa gourmet de bacalao con alioli de azafrán">
+          <span class="hint">Describe el plato, ocasión, raciones o estilo. La IA lo creará con enfoque profesional.</span>
+        </label>
+      </div>
+
+      <div id="iaPanel-tengo" class="ia-panel" style="display:none">
+        <label style="display:flex;flex-direction:column;gap:6px;font-size:13.5px;font-weight:800;color:var(--primary)">¿Qué ingredientes tienes?
+          <textarea id="iaTengo" style="min-height:90px" placeholder="Ej. merluza, gambas, arroz, ajo, pimiento, vino blanco"></textarea>
+          <span class="hint">La IA inventará una receta profesional aprovechando lo que tienes.</span>
+        </label>
+      </div>
+
+      <div id="iaPanel-mias" class="ia-panel" style="display:none">
+        <label style="display:flex;flex-direction:column;gap:6px;font-size:13.5px;font-weight:800;color:var(--primary)">¿Qué ingredientes tienes?
+          <textarea id="iaMias" style="min-height:90px" placeholder="Ej. tengo pollo, limón, romero y patatas"></textarea>
+          <span class="hint">Te diré qué recetas de tu recetario puedes preparar con eso.</span>
+        </label>
+      </div>
+
+      <p id="iaEstado" style="margin-top:12px;font-weight:700;color:var(--muted);font-size:14px;min-height:20px"></p>
+      <div id="iaResultado" style="margin-top:6px"></div>
+
+      <div class="form-actions">
+        <button class="btn btn-line" onclick="cerrarCrearIA()">Cancelar</button>
+        <button class="btn btn-accent" id="iaBoton" onclick="ejecutarCrearIA()">Crear con IA</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Modal lista de la compra -->
 <div class="overlay" id="ovCompra">
@@ -1745,7 +1808,7 @@ document.addEventListener('keydown', e => {
   const cocinaAbierta = document.getElementById('ovCocina').classList.contains('open');
   if(e.key === 'Escape'){
     if(cocinaAbierta){ cerrarCocina(); return; }
-    cerrarForm(); cerrarDetalle(); cerrarImportUrl(); cerrarLogin(); cerrarImportTexto(); cerrarListaCompra(); cerrarNube();
+    cerrarForm(); cerrarDetalle(); cerrarImportUrl(); cerrarLogin(); cerrarImportTexto(); cerrarListaCompra(); cerrarNube(); cerrarCrearIA();
     return;
   }
   if(cocinaAbierta){
@@ -1753,11 +1816,132 @@ document.addEventListener('keydown', e => {
     if(e.key === 'ArrowLeft') pasoCocina(-1);
   }
 });
-['ovForm','ovDetalle','ovImport','ovLogin','ovTexto','ovCompra','ovNube'].forEach(id => {
+['ovForm','ovDetalle','ovImport','ovLogin','ovTexto','ovCompra','ovNube','ovCrearIA'].forEach(id => {
   document.getElementById(id).addEventListener('click', e => {
-    if(e.target.id === id){ cerrarForm(); cerrarDetalle(); cerrarImportUrl(); cerrarLogin(); cerrarImportTexto(); cerrarListaCompra(); cerrarNube(); }
+    if(e.target.id === id){ cerrarForm(); cerrarDetalle(); cerrarImportUrl(); cerrarLogin(); cerrarImportTexto(); cerrarListaCompra(); cerrarNube(); cerrarCrearIA(); }
   });
 });
+
+/* ───── Crear con IA ───── */
+let tabIAactual = 'idea';
+
+function abrirCrearIA(){
+  tabIAactual = 'idea';
+  cambiarTabIA('idea');
+  document.getElementById('iaIdea').value = '';
+  document.getElementById('iaTengo').value = '';
+  document.getElementById('iaMias').value = '';
+  document.getElementById('iaEstado').textContent = '';
+  document.getElementById('iaResultado').innerHTML = '';
+  document.getElementById('iaBoton').disabled = false;
+  document.getElementById('ovCrearIA').classList.add('open');
+}
+function cerrarCrearIA(){
+  document.getElementById('ovCrearIA').classList.remove('open');
+}
+function cambiarTabIA(modo){
+  tabIAactual = modo;
+  document.querySelectorAll('.ia-tab').forEach(t => {
+    t.classList.toggle('activa', t.dataset.modo === modo);
+  });
+  document.querySelectorAll('.ia-panel').forEach(p => p.style.display = 'none');
+  document.getElementById('iaPanel-' + modo).style.display = 'block';
+  document.getElementById('iaResultado').innerHTML = '';
+  document.getElementById('iaEstado').textContent = '';
+  const boton = document.getElementById('iaBoton');
+  boton.textContent = (modo === 'mias') ? 'Buscar en mi recetario' : 'Crear con IA';
+  boton.style.display = 'inline-block';
+}
+
+async function ejecutarCrearIA(){
+  const estado = document.getElementById('iaEstado');
+  const boton = document.getElementById('iaBoton');
+  const resultado = document.getElementById('iaResultado');
+  resultado.innerHTML = '';
+
+  if(tabIAactual === 'idea'){
+    const idea = document.getElementById('iaIdea').value.trim();
+    if(idea.length < 4){ toast('Describe qué plato quieres', 'warn'); return; }
+    boton.disabled = true;
+    estado.textContent = 'La IA está creando tu receta…';
+    try{
+      const receta = await estructurarConIA({ texto: idea, modo: 'generar' });
+      cerrarCrearIA();
+      abrirFormCon(receta);
+      toast('Receta creada: revísala y guarda');
+    }catch(e){
+      estado.textContent = '';
+      toast(e.message || 'No se pudo crear la receta', 'warn');
+    }finally{
+      boton.disabled = false;
+    }
+
+  }else if(tabIAactual === 'tengo'){
+    const ingr = document.getElementById('iaTengo').value.trim();
+    if(ingr.length < 3){ toast('Escribe los ingredientes que tienes', 'warn'); return; }
+    boton.disabled = true;
+    estado.textContent = 'La IA está ideando un plato…';
+    try{
+      const receta = await estructurarConIA({
+        texto: 'Crea una receta profesional aprovechando principalmente estos ingredientes: ' + ingr,
+        modo: 'generar'
+      });
+      cerrarCrearIA();
+      abrirFormCon(receta);
+      toast('Receta creada con tus ingredientes');
+    }catch(e){
+      estado.textContent = '';
+      toast(e.message || 'No se pudo crear la receta', 'warn');
+    }finally{
+      boton.disabled = false;
+    }
+
+  }else if(tabIAactual === 'mias'){
+    const ingr = document.getElementById('iaMias').value.trim();
+    if(ingr.length < 3){ toast('Escribe los ingredientes que tienes', 'warn'); return; }
+    if(recetas.length === 0){ toast('Aún no tienes recetas guardadas', 'warn'); return; }
+    buscarEnMisRecetas(ingr);
+  }
+}
+
+// Busca en el recetario local qué recetas encajan con los ingredientes dados
+function buscarEnMisRecetas(ingrTexto){
+  const estado = document.getElementById('iaEstado');
+  const resultado = document.getElementById('iaResultado');
+  const disponibles = ingrTexto.toLowerCase()
+    .split(/[,\n]+/).map(s => s.trim()).filter(Boolean);
+
+  // Puntuar cada receta por cuántos de sus ingredientes tienes
+  const puntuadas = recetas.map(r => {
+    const ings = (r.ingredients || []).map(i => i.toLowerCase());
+    let coinciden = 0;
+    ings.forEach(ing => {
+      if(disponibles.some(d => ing.includes(d))) coinciden++;
+    });
+    const total = ings.length || 1;
+    return { receta: r, coinciden, total, ratio: coinciden / total };
+  }).filter(x => x.coinciden > 0)
+    .sort((a, b) => b.ratio - a.ratio || b.coinciden - a.coinciden);
+
+  if(puntuadas.length === 0){
+    estado.textContent = 'Ninguna receta encaja con esos ingredientes.';
+    resultado.innerHTML = '';
+    return;
+  }
+  estado.textContent = puntuadas.length + (puntuadas.length === 1 ? ' receta encontrada' : ' recetas encontradas');
+  resultado.innerHTML = puntuadas.slice(0, 8).map(x => {
+    const faltan = x.total - x.coinciden;
+    const nota = faltan === 0
+      ? '<span style="color:var(--ok)">✓ Tienes todo</span>'
+      : 'Te faltan ' + faltan + ' de ' + x.total + ' ingredientes';
+    return `
+      <div class="idea-card" onclick="cerrarCrearIA();abrirDetalle('${x.receta.id}')">
+        <div class="it">${esc(x.receta.title)}</div>
+        <div class="id">${nota} · ${esc(x.receta.category)}</div>
+      </div>
+    `;
+  }).join('');
+}
 
 /* ───── Lista de la compra ───── */
 let compraSeleccionadas = {};
@@ -1783,6 +1967,7 @@ function abrirListaCompra(){
       </span>
     </label>
   `).join('');
+  document.getElementById('ovCompra').classList.add('open');
 }
 function cerrarListaCompra(){
   document.getElementById('ovCompra').classList.remove('open');
