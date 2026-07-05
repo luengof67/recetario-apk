@@ -96,6 +96,20 @@
   .idea-card:hover{border-color:var(--secondary);transform:translateY(-1px)}
   .idea-card .it{font-weight:800;font-size:15.5px;color:var(--primary)}
   .idea-card .id{color:var(--muted);font-size:13.5px;font-weight:600;margin-top:2px}
+  .foto-controles{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+  .foto-btn{padding:9px 14px;font-size:14px}
+  .foto-preview{position:relative;margin-top:10px;display:inline-block;max-width:100%}
+  .foto-preview img{
+    max-width:100%;max-height:220px;border-radius:10px;
+    border:1px solid var(--line);display:block;
+  }
+  .foto-quitar{
+    position:absolute;top:8px;right:8px;
+    width:30px;height:30px;border-radius:50%;
+    background:rgba(44,24,16,.85);color:#fff;border:none;
+    font-size:20px;line-height:1;cursor:pointer;
+  }
+  .foto-quitar:hover{background:var(--accent)}
   .btn-line{background:#fff;color:var(--primary);border:1.5px solid var(--line)}
   .btn-line:hover{border-color:var(--secondary)}
   .btn-danger{background:#fff;color:#B3402A;border:1.5px solid #E8C4BA}
@@ -615,8 +629,20 @@
         <label class="span4">Raciones
           <input type="number" id="rServings" min="1" value="4">
         </label>
-        <label class="span12">URL de imagen <span class="hint">(opcional, p. ej. enlace de Cloudinary)</span>
-          <input type="url" id="rImageUrl" placeholder="https://…">
+        <label class="span12">Foto del plato <span class="hint">(opcional)</span>
+          <div class="foto-controles">
+            <button type="button" class="btn btn-line foto-btn" onclick="document.getElementById('rFotoCamara').click()">📷 Cámara</button>
+            <button type="button" class="btn btn-line foto-btn" onclick="document.getElementById('rFotoGaleria').click()">🖼 Galería</button>
+            <button type="button" class="btn btn-line foto-btn" onclick="toggleUrlImagen()">🔗 URL</button>
+          </div>
+          <input type="file" id="rFotoCamara" accept="image/*" capture="environment" style="display:none" onchange="subirFotoReceta(event)">
+          <input type="file" id="rFotoGaleria" accept="image/*" style="display:none" onchange="subirFotoReceta(event)">
+          <input type="url" id="rImageUrl" placeholder="https://…" style="display:none;margin-top:8px">
+          <div id="rFotoPreview" class="foto-preview" style="display:none">
+            <img id="rFotoImg" src="" alt="Vista previa">
+            <button type="button" class="foto-quitar" onclick="quitarFotoReceta()" title="Quitar foto">×</button>
+          </div>
+          <p id="rFotoEstado" class="hint" style="margin-top:6px"></p>
         </label>
         <label class="span12">Ingredientes <span class="hint">— uno por línea, con cantidad (ej. 500 g de rape)</span>
           <textarea id="rIngredients"></textarea>
@@ -671,6 +697,10 @@
 
 /* ───── Cloudflare Worker (IA para estructurar recetas) ───── */
 const WORKER_URL = 'https://recetario-ia.luengof67.workers.dev/';
+
+/* ───── Cloudinary (fotos, como Hablemos de Cocina) ───── */
+const CLOUDINARY_CLOUD = 'dn7hmxeqe';
+const CLOUDINARY_PRESET = 'cocina_app';
 
 /* ───── Firebase (Hablemos de Cocina) ───── */
 const firebaseConfig = {
@@ -872,6 +902,11 @@ function abrirForm(id){
   document.getElementById('rIngredients').value = r ? (r.ingredients||[]).join('\n') : '';
   document.getElementById('rSteps').value = r ? (r.steps||[]).join('\n') : '';
   document.getElementById('rTags').value = r ? (r.tags||[]).join(', ') : '';
+
+  // Foto: previsualización y reseteo de estado
+  document.getElementById('rFotoEstado').textContent = '';
+  document.getElementById('rImageUrl').style.display = 'none';
+  mostrarPreviewFoto((r && r.imageUrl) ? r.imageUrl : null);
 
   cerrarDetalle();
   document.getElementById('ovForm').classList.add('open');
@@ -1665,6 +1700,72 @@ function comprimirImagen(file){
   });
 }
 
+/* ───── Fotos de recetas (Cloudinary) ───── */
+function toggleUrlImagen(){
+  const campo = document.getElementById('rImageUrl');
+  campo.style.display = (campo.style.display === 'none') ? 'block' : 'none';
+  if(campo.style.display === 'block') campo.focus();
+  campo.oninput = () => {
+    const v = campo.value.trim();
+    mostrarPreviewFoto(v || null);
+  };
+}
+
+function mostrarPreviewFoto(url){
+  if(url){
+    document.getElementById('rFotoImg').src = url;
+    document.getElementById('rFotoPreview').style.display = 'inline-block';
+  }else{
+    document.getElementById('rFotoPreview').style.display = 'none';
+    document.getElementById('rFotoImg').src = '';
+  }
+}
+
+function quitarFotoReceta(){
+  document.getElementById('rImageUrl').value = '';
+  mostrarPreviewFoto(null);
+  document.getElementById('rFotoEstado').textContent = '';
+}
+
+async function subirFotoReceta(ev){
+  const file = ev.target.files[0];
+  ev.target.value = '';
+  if(!file) return;
+  if(!file.type.startsWith('image/')){ toast('Selecciona una imagen', 'warn'); return; }
+
+  const estado = document.getElementById('rFotoEstado');
+  estado.textContent = 'Subiendo foto…';
+
+  try{
+    // Comprimir antes de subir (más rápido y ligero)
+    const dataUrl = await comprimirImagen(file);
+    const blob = await (await fetch(dataUrl)).blob();
+
+    const form = new FormData();
+    form.append('file', blob);
+    form.append('upload_preset', CLOUDINARY_PRESET);
+
+    const res = await fetch('https://api.cloudinary.com/v1_1/' + CLOUDINARY_CLOUD + '/image/upload', {
+      method: 'POST',
+      body: form
+    });
+    if(!res.ok){
+      const detalle = await res.text();
+      throw new Error('Cloudinary: ' + detalle.slice(0, 120));
+    }
+    const data = await res.json();
+    if(!data.secure_url) throw new Error('No se recibió la URL de la foto');
+
+    document.getElementById('rImageUrl').value = data.secure_url;
+    mostrarPreviewFoto(data.secure_url);
+    estado.textContent = '✓ Foto subida';
+  }catch(e){
+    console.error(e);
+    estado.textContent = '';
+    toast('No se pudo subir la foto: ' + (e.message || ''), 'warn');
+  }
+}
+
 function extraerReceta(html){
   const doc = new DOMParser().parseFromString(html, 'text/html');
   const scripts = doc.querySelectorAll('script[type="application/ld+json"]');
@@ -1801,6 +1902,7 @@ function abrirFormCon(r){
   document.getElementById('rIngredients').value = r.ingredients.join('\n');
   document.getElementById('rSteps').value = r.steps.join('\n');
   document.getElementById('rTags').value = r.tags.join(', ');
+  mostrarPreviewFoto(r.imageUrl || null);
 }
 
 /* ───── Cierre con Escape y clic fuera ───── */
